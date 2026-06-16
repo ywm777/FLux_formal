@@ -1,0 +1,95 @@
+/* Flux 设计令牌 — 深色优先（见 docs/ui-spec.md §2） */
+:root {
+  /* 背景层级 */
+  --bg-base: #0f1114;
+  --bg-surface: #1a1d23;
+  --bg-elevated: #21252d;
+  --bg-inset: #0b0d10;
+
+  /* 边框 */
+  --border-subtle: #2a2f38;
+  --border-strong: #3a4150;
+
+  /* 文本 */
+  --text-primary: #e8eaed;
+  --text-muted: #8b929a;
+  --text-disabled: #565d66;
+  --text-inverse: #0f1114;
+
+  /* 强调色 */
+  --accent: #5b8def;
+  --accent-hover: #6f9bf2;
+  --accent-active: #4a79d6;
+  --accent-subtle: rgba(91, 141, 239, 0.12);
+
+  /* 状态色 */
+  --success: #4caf82;
+  --warning: #d4a053;
+  --danger: #c75c5c;
+  --info: #5b8def;
+  --success-subtle: rgba(76, 175, 130, 0.14);
+  --warning-subtle: rgba(212, 160, 83, 0.14);
+  --danger-subtle: rgba(199, 92, 92, 0.14);
+
+  /* 画布 */
+  --canvas-bg: #0f1114;
+  --canvas-dot: rgba(42, 47, 56, 0.5);
+  --canvas-edge: #5b8def;
+  --canvas-edge-hover: #6f9bf2;
+
+  /* 载体类型色 */
+  --carrier-app: #5b8def;
+  --carrier-code: #b48ead;
+  --carrier-ai: #4caf82;
+  --carrier-data: #d4a053;
+  --carrier-subflow: #56b6c2;
+  --carrier-trigger: #c75c5c;
+  --carrier-basic: #8b929a;
+
+  /* 字体 */
+  --font-sans: "Inter", "HarmonyOS Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+
+  /* 间距 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* 圆角 */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 9999px;
+
+  /* 阴影 */
+  --shadow-drawer: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.35);
+
+  /* 动效 */
+  --motion-fast: 120ms;
+  --motion-normal: 200ms;
+  --motion-slow: 320ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+
+  /* z-index */
+  --z-canvas: 0;
+  --z-floating-toolbar: 100;
+  --z-drawer: 200;
+  --z-topbar: 300;
+  --z-command-palette: 400;
+  --z-popover: 500;
+  --z-toast: 600;
+  --z-modal: 700;
+}

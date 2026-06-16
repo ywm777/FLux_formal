@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Flux 桌面端默认能力集（最小权限，按需扩展）",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

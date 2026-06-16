@@ -1,0 +1,37 @@
+{
+  "name": "@flux/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Flux 桌面端（Tauri 2 + React + Vite）",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@flux/canvas-core": "workspace:*",
+    "@flux/node-sdk": "workspace:*",
+    "@flux/shared": "workspace:*",
+    "@flux/ui": "workspace:*",
+    "@flux/workflow-schema": "workspace:*",
+    "@tauri-apps/api": "^2.0.0",
+    "@xyflow/react": "^12.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.2"
+  }
+}
