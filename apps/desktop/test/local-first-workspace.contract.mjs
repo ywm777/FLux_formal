@@ -49,7 +49,7 @@ const requirements = [
   ],
   [
     "local workflow records persist through the desktop storage boundary",
-    /STORAGE_KEY = "local-workspace"[\s\S]*desktopStorage\.read[\s\S]*desktopStorage\.write[\s\S]*LocalWorkflowVersionConflictError/,
+    /STORAGE_KEY = "local-workspace"[\s\S]*desktopStorage\.read[\s\S]*desktopStorage\.write[\s\S]*WorkflowVersionConflictError/,
     localRepository,
   ],
   [

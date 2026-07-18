@@ -4,11 +4,14 @@ import "@flux/ui/tokens.css";
 import "./global.css";
 import { App } from "./App.js";
 import { WorkflowCommandProvider } from "./app/WorkflowCommandProvider.js";
+import { WorkspaceServiceProvider } from "./app/WorkspaceServiceProvider.js";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <WorkflowCommandProvider>
-      <App />
-    </WorkflowCommandProvider>
+    <WorkspaceServiceProvider>
+      <WorkflowCommandProvider>
+        <App />
+      </WorkflowCommandProvider>
+    </WorkspaceServiceProvider>
   </React.StrictMode>,
 );
