@@ -11,6 +11,10 @@ const workflowCommandCoordinator = readFileSync(
 );
 const titleBar = readFileSync(resolve(desktop, "src/components/TitleBar.tsx"), "utf8");
 const canvas = readFileSync(resolve(desktop, "src/features/canvas/CanvasView.tsx"), "utf8");
+const canvasSession = readFileSync(
+  resolve(desktop, "src/features/canvas/session/useCanvasSession.ts"),
+  "utf8",
+);
 const workbench = readFileSync(resolve(desktop, "src/features/workbench/WorkbenchView.tsx"), "utf8");
 const dialog = readFileSync(resolve(desktop, "src/features/sharing/ShareWorkflowDialog.tsx"), "utf8");
 const sharedView = readFileSync(resolve(desktop, "src/features/sharing/SharedWorkflowView.tsx"), "utf8");
@@ -36,7 +40,9 @@ const requirements = [
   ],
   [
     "canvas saves the latest graph before opening the share dialog",
-    /const onShare = useCallback[\s\S]*await save\([\s\S]*setShareOpen\(true\)[\s\S]*<ShareWorkflowDialog/,
+    (source) =>
+      /const onShare = useCallback[\s\S]*await saveNow\(\)[\s\S]*setShareOpen\(true\)[\s\S]*<ShareWorkflowDialog/.test(source) &&
+      /const saveNow = useCallback[\s\S]*persist\(signatureRef\.current, "save"\)/.test(canvasSession),
     canvas,
   ],
   [
