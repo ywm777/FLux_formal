@@ -1,6 +1,6 @@
 import type { WorkflowRecord } from "@flux/shared";
 import type { WorkspaceRepositoryPort } from "../../workspace/application/workspaceRepositoryPort.js";
-import type { WorkflowFilePort } from "./workflowFilePort.js";
+import type { WorkflowFilePort } from "../../workspace/application/workflowFilePort.js";
 
 export interface WorkbenchService {
   exportWorkflow(workflowId: string): Promise<void>;

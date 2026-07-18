@@ -6,7 +6,7 @@ export interface ImportedWorkflowDocument {
   graph: unknown;
 }
 
-/** Portable workflow-file capability consumed by workbench use cases. */
+/** Portable workflow-file capability shared by workspace application use cases. */
 export interface WorkflowFilePort {
   parse(source: string): ImportedWorkflowDocument;
   download(workflow: WorkflowRecord): void;

@@ -3,7 +3,7 @@ import test from "node:test";
 import type { WorkflowRecord } from "@flux/shared";
 import { createWorkbenchService } from "../src/features/workbench/application/workbenchService.ts";
 import type { WorkspaceRepositoryPort } from "../src/features/workspace/application/workspaceRepositoryPort.ts";
-import type { WorkflowFilePort } from "../src/features/workbench/application/workflowFilePort.ts";
+import type { WorkflowFilePort } from "../src/features/workspace/application/workflowFilePort.ts";
 
 function record(graph: unknown = { id: "graph" }): WorkflowRecord {
   return {
