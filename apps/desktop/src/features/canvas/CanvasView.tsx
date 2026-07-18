@@ -32,7 +32,6 @@ import {
   type FormValue,
 } from "@flux/ui";
 import {
-  AUTOSAVE_DEBOUNCE_MS,
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
   type ExecutionDetail,
@@ -50,21 +49,15 @@ import {
   getNodeTypeName,
 } from "../../lib/nodeDisplay.js";
 import {
-  ApiError,
-} from "../../lib/api.js";
-import {
   approveExecutionAndContinue,
   runDraftExecution,
   type ExecutionResponse,
 } from "../../lib/executionGateway.js";
-import { workspaceRepository } from "../../lib/workspaceRepository.js";
-import { LocalWorkflowVersionConflictError } from "../../lib/localWorkspaceRepository.js";
 import {
   formatExecutionMessage,
 } from "../../lib/executionDisplay.js";
 import { formatProductErrorMessage } from "../../lib/productError.js";
 import { defaultsFromSchema, toFormSchema } from "../../lib/schemaBridge.js";
-import { getLatestWorkflowSummary } from "../../lib/workflowSelection.js";
 import {
   getWorkflowTemplate,
   type WorkflowTemplateId,
@@ -108,6 +101,7 @@ import {
   useRegisterWorkflowCommands,
   useWorkflowCommands,
 } from "../../app/WorkflowCommandProvider.js";
+import { useCanvasSession } from "./session/useCanvasSession.js";
 
 let counter = 0;
 const nextId = () => `n${++counter}`;
@@ -118,7 +112,6 @@ const NODE_COLLISION_X = 330;
 const NODE_COLLISION_Y = 170;
 const NODE_SPACING_X = 380;
 const NODE_SPACING_Y = 190;
-const FORCE_AUTOSAVE_SIGNATURE = "__force_autosave__";
 
 interface GraphSnapshot {
   nodes: Node<FluxNodeData>[];
@@ -390,10 +383,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
   const runtimeInputDraftsRef = useRef<ExecutionNodeInputs>({});
   const [runtimeInputRevision, setRuntimeInputRevision] = useState(0);
   const [runtimeInputError, setRuntimeInputError] = useState<string | null>(null);
-  const [conflict, setConflict] = useState<{
-    localVersion: number;
-    remoteVersion: number;
-  } | null>(null);
   const insertPos = useRef<{ x: number; y: number } | null>(null);
   const insertSourceId = useRef<string | null>(null);
   const rf = useRef<ReactFlowInstance<Node<FluxNodeData>, Edge> | null>(null);
@@ -409,9 +398,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
   const applyRecord = useCanvasStore((s) => s.applyRecord);
   const testing = useCanvasStore((s) => s.testing);
 
-  const ready = useRef(false);
-  const lastSig = useRef("");
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const undoStackRef = useRef<GraphSnapshot[]>([]);
   const redoStackRef = useRef<GraphSnapshot[]>([]);
   const fitViewRequestedRef = useRef(false);
@@ -421,7 +407,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
   const selectedEdgeDragRef = useRef<Edge | null>(null);
   const edgeIdCounterRef = useRef(0);
   const suppressNodeSelectionUntilRef = useRef(0);
-  const wasActiveRef = useRef(active);
   const groupDragRef = useRef<{
     pointerId: number;
     groupId: string;
@@ -438,9 +423,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
   const workflowId = useCanvasStore((s) => s.workflowId);
   const setWorkflowTitle = useCanvasStore((s) => s.setTitle);
   const testRunDisplay = testRunDetail ?? testRunResult;
-  const openWorkflowNonce = useCanvasStore((s) => s.openWorkflowNonce);
-  const openWorkflowId = useCanvasStore((s) => s.openWorkflowId);
-  const newWorkflowNonce = useCanvasStore((s) => s.newWorkflowNonce);
   const addNodeNonce = useCanvasStore((s) => s.addNodeNonce);
   const insertNodeNonce = useCanvasStore((s) => s.insertNodeNonce);
   const insertNodeType = useCanvasStore((s) => s.insertNodeType);
@@ -500,14 +482,11 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     runtimeInputDraftsRef.current = {};
     setRuntimeInputRevision((revision) => revision + 1);
     setRuntimeInputError(null);
-    setConflict(null);
     setMenu(null);
     insertPos.current = null;
     insertSourceId.current = null;
     undoStackRef.current = [];
     redoStackRef.current = [];
-    lastSig.current = FORCE_AUTOSAVE_SIGNATURE;
-    ready.current = true;
     scheduleFitView();
   }, [setNodes, setEdges, scheduleFitView]);
 
@@ -519,7 +498,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       const parsed = safeParseGraph(record.graph);
       if (!parsed.success) {
         useCanvasStore.getState().setStatus("error", "工作流图数据不可读取");
-        return false;
+        return null;
       }
 
       const { nodes: ln, edges: le, groups: loadedGroups } = fromWorkflowGraph(parsed.data);
@@ -542,169 +521,51 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       setMenu(null);
       undoStackRef.current = [];
       redoStackRef.current = [];
-      lastSig.current = graphSignature(ln, le, persistedGraphTitle, loadedGroups);
+      const loadedSignature = graphSignature(
+        ln,
+        le,
+        persistedGraphTitle,
+        loadedGroups,
+      );
       applyRecord(record);
       if (keepLocalTitle && localTitle !== record.title) {
         useCanvasStore.getState().setTitle(localTitle);
       }
       scheduleFitView();
-      return true;
+      return loadedSignature;
     },
     [applyRecord, setNodes, setEdges, scheduleFitView],
   );
 
-  // 加载已保存工作流（刷新后恢复）
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const hydrationState = useCanvasStore.getState();
-        const requestedWorkflowId = hydrationState.openWorkflowId;
-        const hydrationOpenWorkflowNonce = hydrationState.openWorkflowNonce;
-        const hydrationNewWorkflowNonce = hydrationState.newWorkflowNonce;
-        const hydrationIsCurrent = () => {
-          const current = useCanvasStore.getState();
-          return (
-            current.openWorkflowId === requestedWorkflowId &&
-            current.openWorkflowNonce === hydrationOpenWorkflowNonce &&
-            current.newWorkflowNonce === hydrationNewWorkflowNonce
-          );
-        };
-        if (requestedWorkflowId) {
-          const record = await workspaceRepository.get(requestedWorkflowId);
-          if (!cancelled && hydrationIsCurrent()) {
-            applyWorkflowRecordToCanvas(record);
-          }
-          return;
-        }
-
-        const pendingNewWorkflow = hydrationState.newWorkflowPending;
-        if (pendingNewWorkflow) {
-          if (!cancelled) resetCanvasDraft();
-          return;
-        }
-
-        const list = await workspaceRepository.list();
-        const latest = getLatestWorkflowSummary(list);
-        if (!cancelled && latest && hydrationIsCurrent()) {
-          const record = await workspaceRepository.get(latest.id);
-          if (cancelled || !hydrationIsCurrent()) return;
-          applyWorkflowRecordToCanvas(record, true);
-        }
-      } catch {
-        /* 未登录或网络错误：保留种子节点 */
-      } finally {
-        if (!cancelled) {
-          if (!lastSig.current && lastSig.current !== FORCE_AUTOSAVE_SIGNATURE) lastSig.current = graphSignature(nodes, edges, workflowTitle, groups);
-          ready.current = true;
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [applyWorkflowRecordToCanvas, resetCanvasDraft]);
-
-  const seenOpenWorkflowNonce = useRef(openWorkflowNonce);
-  useEffect(() => {
-    if (openWorkflowNonce === seenOpenWorkflowNonce.current) return;
-    seenOpenWorkflowNonce.current = openWorkflowNonce;
-    if (!openWorkflowId) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        ready.current = false;
-        const record = await workspaceRepository.get(openWorkflowId);
-        if (!cancelled) applyWorkflowRecordToCanvas(record);
-      } catch (err) {
-        if (cancelled) return;
-        useCanvasStore
-          .getState()
-          .setStatus(
-            "error",
-            formatProductErrorMessage(err, "打开工作流失败"),
-          );
-      } finally {
-        if (!cancelled) ready.current = true;
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [openWorkflowNonce, openWorkflowId, applyWorkflowRecordToCanvas]);
-
-  const seenNewWorkflowNonce = useRef(newWorkflowNonce);
-  useEffect(() => {
-    if (newWorkflowNonce === seenNewWorkflowNonce.current) return;
-    seenNewWorkflowNonce.current = newWorkflowNonce;
-    resetCanvasDraft();
-  }, [newWorkflowNonce, resetCanvasDraft]);
-
-  const save = useCallback(
-    async (sig: string) => {
-      const store = useCanvasStore.getState();
-      store.setStatus("saving");
-      const graph = toWorkflowGraph(
-        store.workflowId ?? "wf_canvas",
+  const signature = useMemo(
+    () => graphSignature(nodes, edges, workflowTitle, groups),
+    [nodes, edges, groups, workflowTitle],
+  );
+  const createGraph = useCallback(
+    () =>
+      toWorkflowGraph(
+        useCanvasStore.getState().workflowId ?? "wf_canvas",
         nodes,
         edges,
         rf.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 },
         workflowTitle,
         groups,
-      );
-      try {
-        const record = store.workflowId
-          ? await workspaceRepository.update(store.workflowId, {
-              title: workflowTitle,
-              graph,
-              expectedVersion: store.version,
-            })
-          : await workspaceRepository.create(workflowTitle, graph);
-        lastSig.current = sig;
-        useCanvasStore.getState().applyRecord(record);
-        return record;
-      } catch (err) {
-        const currentVersion = err instanceof LocalWorkflowVersionConflictError
-          ? err.currentVersion
-          : err instanceof ApiError
-            ? err.details.currentVersion
-            : undefined;
-        const isVersionConflict =
-          (err instanceof LocalWorkflowVersionConflictError ||
-            (err instanceof ApiError &&
-              err.status === 409 &&
-              err.details.code === "WORKFLOW_VERSION_CONFLICT")) &&
-          typeof currentVersion === "number";
-        if (isVersionConflict) {
-          setConflict({
-            localVersion: useCanvasStore.getState().version,
-            remoteVersion: currentVersion,
-          });
-        }
-        const message =
-          isVersionConflict
-            ? "版本冲突，请选择保留本地或使用云端"
-            : formatProductErrorMessage(err, "保存失败");
-        useCanvasStore.getState().setStatus("error", message);
-        return null;
-      }
-    },
-    [nodes, edges, workflowTitle, groups],
+      ),
+    [edges, groups, nodes, workflowTitle],
   );
-
-  // debounce 自动保存
-  useEffect(() => {
-    if (!ready.current) return;
-    const sig = graphSignature(nodes, edges, workflowTitle, groups);
-    if (sig === lastSig.current) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => void save(sig), AUTOSAVE_DEBOUNCE_MS);
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-  }, [nodes, edges, workflowTitle, groups, save]);
+  const {
+    conflict,
+    saveNow,
+    publish: publishSession,
+    keepLocalVersion,
+    useStoredVersion,
+  } = useCanvasSession({
+    active,
+    applyWorkflowRecord: applyWorkflowRecordToCanvas,
+    resetCanvasDraft,
+    createGraph,
+    signature,
+  });
 
   const recordHistory = useCallback(() => {
     undoStackRef.current.push(cloneGraphSnapshot(
@@ -1719,8 +1580,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
 
       if (matchesShortcut(event, "save-workflow")) {
         event.preventDefault();
-        if (saveTimer.current) clearTimeout(saveTimer.current);
-        void save(graphSignature(nodes, edges, workflowTitle, groups));
+        void saveNow();
         return;
       }
 
@@ -1836,7 +1696,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     edges,
     workflowTitle,
     groups,
-    save,
+    saveNow,
     workflowCommands,
     renameOpen,
     paletteOpen,
@@ -1862,27 +1722,23 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     const store = useCanvasStore.getState();
     store.setPublishing(true);
     try {
-      if (!store.workflowId) {
-        await save(graphSignature(nodes, edges, workflowTitle, groups));
+      const record = await publishSession();
+      if (!record) {
+        throw new Error(useCanvasStore.getState().error ?? "发布失败");
       }
-      const id = useCanvasStore.getState().workflowId;
-      if (!id) throw new Error("请先保存工作流");
-      await workspaceRepository.publish(id);
     } catch (err) {
       setError(formatProductErrorMessage(err, "发布失败"));
     } finally {
       useCanvasStore.getState().setPublishing(false);
     }
-  }, [nodes, edges, workflowTitle, groups, save]);
+  }, [publishSession]);
 
   const onShare = useCallback(async () => {
     setError(null);
     const store = useCanvasStore.getState();
     store.setSharing(true);
     try {
-      const record = await save(
-        graphSignature(nodes, edges, workflowTitle, groups),
-      );
+      const record = await saveNow();
       if (!record) throw new Error("请先保存工作流");
       setShareOpen(true);
     } catch (err) {
@@ -1890,7 +1746,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     } finally {
       useCanvasStore.getState().setSharing(false);
     }
-  }, [nodes, edges, workflowTitle, groups, save]);
+  }, [saveNow]);
 
   const executeDraftRun = useCallback(async (
     inputs: ExecutionNodeInputs = {},
@@ -1905,7 +1761,10 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     initializeNodeRunState();
     useCanvasStore.getState().setTesting(true);
     try {
-      await save(graphSignature(nodes, edges, workflowTitle, groups));
+      const saved = await saveNow();
+      if (!saved) {
+        throw new Error(useCanvasStore.getState().error ?? "请先保存工作流");
+      }
       const id = useCanvasStore.getState().workflowId;
       if (!id) throw new Error("请先保存工作流");
       const result = await runDraftExecution(id, inputs, (detail) => {
@@ -1932,11 +1791,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       useCanvasStore.getState().setTesting(false);
     }
   }, [
-    nodes,
-    edges,
-    workflowTitle,
-    groups,
-    save,
+    saveNow,
     clearNodeRunState,
     initializeNodeRunState,
     applyNodeRunState,
@@ -1991,11 +1846,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
 
   useRegisterWorkflowCommands({
     save: async () => {
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
-        saveTimer.current = null;
-      }
-      await save(graphSignature(nodes, edges, workflowTitle, groups));
+      await saveNow();
     },
     publish: onPublish,
     share: onShare,
@@ -2039,27 +1890,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     },
     [applyNodeRunState, testRunDetail, testRunResult],
   );
-
-  // 顶栏立即保存：复用自动保存链路，但取消尚未触发的防抖任务。
-  const saveRef = useRef(save);
-  useEffect(() => {
-    saveRef.current = save;
-  }, [save]);
-
-  useEffect(() => {
-    const wasActive = wasActiveRef.current;
-    wasActiveRef.current = active;
-    if (!wasActive || active || !ready.current) return;
-
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = null;
-    }
-    if (useCanvasStore.getState().status === "saving") return;
-
-    const signature = graphSignature(nodes, edges, workflowTitle, groups);
-    if (signature !== lastSig.current) void saveRef.current(signature);
-  }, [active, nodes, edges, workflowTitle, groups]);
 
   const seenAddNodeNonce = useRef(addNodeNonce);
   useEffect(() => {
@@ -2540,32 +2370,8 @@ export function CanvasView({ active = true }: { active?: boolean }) {
         open={conflict !== null}
         localVersion={conflict?.localVersion ?? 0}
         remoteVersion={conflict?.remoteVersion ?? 0}
-        onKeepLocal={() => {
-          if (!conflict) return;
-          useCanvasStore.getState().setVersion(conflict.remoteVersion);
-          setConflict(null);
-          void save(graphSignature(nodes, edges, workflowTitle, groups));
-        }}
-        onUseRemote={async () => {
-          setConflict(null);
-          const id = useCanvasStore.getState().workflowId;
-          if (!id) return;
-          const record = await workspaceRepository.get(id);
-          const parsed = safeParseGraph(record.graph);
-          if (parsed.success) {
-            const { nodes: ln, edges: le, groups: loadedGroups } = fromWorkflowGraph(parsed.data);
-            const persistedGraphTitle = parsed.data.meta.title ?? record.title;
-            bumpCounter(ln);
-            bumpGroupCounter(loadedGroups);
-            setNodes(ln);
-            setEdges(le);
-            setGroups(loadedGroups);
-            setSelectedNodeIds([]);
-            setSelectedGroupId(null);
-            lastSig.current = graphSignature(ln, le, persistedGraphTitle, loadedGroups);
-            useCanvasStore.getState().applyRecord(record);
-          }
-        }}
+        onKeepLocal={() => void keepLocalVersion()}
+        onUseRemote={useStoredVersion}
       />
       <ShareWorkflowDialog
         open={shareOpen}

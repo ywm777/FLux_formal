@@ -14,6 +14,8 @@ const workbench = readDesktop("src/features/workbench/WorkbenchView.tsx");
 const titleBar = readDesktop("src/components/TitleBar.tsx");
 const canvas = readDesktop("src/features/canvas/CanvasView.tsx");
 const workflowCommands = readDesktop("src/app/WorkflowCommandProvider.tsx");
+const canvasSession = readDesktop("src/features/canvas/session/useCanvasSession.ts");
+const workflowSession = readDesktop("src/features/workspace/application/workflowSessionService.ts");
 const shareDialog = readDesktop("src/features/sharing/ShareWorkflowDialog.tsx");
 const runtime = readFileSync(
   resolve(repositoryRoot, "packages/workflow-runtime/src/runtime.ts"),
@@ -111,8 +113,9 @@ const requirements = [
     "the explicit save command reaches the same persisted graph path as autosave",
     (source) =>
       /useRegisterWorkflowCommands\(\{[\s\S]*save: async \(\)/.test(source) &&
-      /save\(graphSignature\(nodes, edges, workflowTitle, groups\)\)/.test(source) &&
-      /workspaceRepository\.(create|update)/.test(source) &&
+      /saveNow\(\)/.test(source) &&
+      /saveNow[\s\S]*persist\(signatureRef\.current, "save"\)/.test(canvasSession) &&
+      /repository\.(create|update)/.test(workflowSession) &&
       /export function useWorkflowCommands/.test(workflowCommands),
     canvas,
   ],

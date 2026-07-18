@@ -15,7 +15,7 @@ const requirements = [
   ],
   [
     "the active canvas session registers the persisted save path",
-    /useRegisterWorkflowCommands\(\{[\s\S]*save: async \(\) =>[\s\S]*save\(graphSignature\(nodes, edges, workflowTitle, groups\)\)/,
+    /useCanvasSession\(\{[\s\S]*useRegisterWorkflowCommands\(\{[\s\S]*save: async \(\) =>[\s\S]*saveNow\(\)/,
     canvas,
   ],
   [
