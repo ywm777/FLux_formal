@@ -55,6 +55,15 @@ const requirements = [
     localRepository,
   ],
   [
+    "local workflow reads and writes cross the shared schema migration boundary",
+    (source) =>
+      /import \{ parseGraph \} from "@flux\/workflow-schema"/.test(source) &&
+      /graph: parseGraph\(graph\)/.test(source) &&
+      /record\.graph = parseGraph\(record\.graph\)/.test(source) &&
+      /patch\.graph !== undefined\) record\.graph = parseGraph\(patch\.graph\)/.test(source),
+    localRepository,
+  ],
+  [
     "local and cloud execution share one dispatcher and runtime",
     (source) =>
       /runLocalDraftExecution/.test(source) &&

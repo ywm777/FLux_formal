@@ -21,6 +21,7 @@ class CapturingQueue extends ExecutionQueue {
 }
 
 const validGraph: WorkflowGraph = {
+  schemaVersion: 1,
   id: "graph-valid",
   version: 1,
   viewport: { x: 0, y: 0, zoom: 1 },
@@ -43,6 +44,7 @@ const validGraph: WorkflowGraph = {
 };
 
 const approvalGraph: WorkflowGraph = {
+  schemaVersion: 1,
   id: "graph-approval",
   version: 1,
   viewport: { x: 0, y: 0, zoom: 1 },
@@ -78,6 +80,7 @@ const approvalGraph: WorkflowGraph = {
 };
 
 const runtimeInputGraph: WorkflowGraph = {
+  schemaVersion: 1,
   id: "graph-runtime-input",
   version: 1,
   viewport: { x: 0, y: 0, zoom: 1 },
@@ -100,6 +103,7 @@ const runtimeInputGraph: WorkflowGraph = {
 };
 
 const connectedRuntimeInputGraph: WorkflowGraph = {
+  schemaVersion: 1,
   id: "graph-connected-runtime-input",
   version: 1,
   viewport: { x: 0, y: 0, zoom: 1 },

@@ -4,6 +4,7 @@ import {
   type WorkflowStatus,
   type WorkflowSummary,
 } from "@flux/shared";
+import { parseGraph } from "@flux/workflow-schema";
 import { desktopStorage } from "./desktopStorage.js";
 import {
   WorkflowVersionConflictError,
@@ -85,7 +86,7 @@ function localRecord(
     isFavorite: false,
     createdAt: now,
     updatedAt: now,
-    graph: structuredClone(graph),
+    graph: parseGraph(graph),
   };
 }
 
@@ -95,6 +96,7 @@ function requireRecord(
 ): WorkflowRecord {
   const record = snapshot.workflows.find((workflow) => workflow.id === id);
   if (!record) throw new Error("本地工作流不存在");
+  record.graph = parseGraph(record.graph);
   return record;
 }
 
@@ -140,7 +142,7 @@ export const localWorkspaceRepository = {
         record.title = patch.title.trim() || "未命名工作流";
       }
       if (patch.tags !== undefined) record.tags = [...patch.tags];
-      if (patch.graph !== undefined) record.graph = structuredClone(patch.graph);
+      if (patch.graph !== undefined) record.graph = parseGraph(patch.graph);
       record.version += 1;
       record.updatedAt = new Date().toISOString();
       await writeSnapshot(snapshot);

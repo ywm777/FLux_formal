@@ -1,6 +1,9 @@
 import type { Node, Edge } from "@xyflow/react";
 import type { NodeDefinition } from "@flux/node-sdk";
-import type { WorkflowGraph } from "@flux/workflow-schema";
+import {
+  CURRENT_WORKFLOW_SCHEMA_VERSION,
+  type WorkflowGraph,
+} from "@flux/workflow-schema";
 import type { CarrierColorKey } from "@flux/ui";
 import type { FluxNodeData } from "./FluxNode.js";
 
@@ -50,6 +53,7 @@ export function toWorkflowGraph(
   title = "未命名工作流",
 ): WorkflowGraph {
   return {
+    schemaVersion: CURRENT_WORKFLOW_SCHEMA_VERSION,
     id,
     version: 1,
     viewport,

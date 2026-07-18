@@ -1,12 +1,11 @@
 import {
-  WorkflowGraphSchema,
   parseGraph,
   type WorkflowGraph,
 } from "@flux/workflow-schema";
 
 /** 序列化为持久化字符串 */
 export function serializeGraph(graph: WorkflowGraph): string {
-  return JSON.stringify(WorkflowGraphSchema.parse(graph));
+  return JSON.stringify(parseGraph(graph));
 }
 
 /** 从字符串反序列化并标准化 */
