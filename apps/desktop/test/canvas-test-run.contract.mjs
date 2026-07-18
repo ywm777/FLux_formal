@@ -5,6 +5,10 @@ const root = resolve(import.meta.dirname, "..");
 const canvasStore = readFileSync(resolve(root, "src/store/canvasStore.ts"), "utf8");
 const titleBar = readFileSync(resolve(root, "src/components/TitleBar.tsx"), "utf8");
 const canvasView = readFileSync(resolve(root, "src/features/canvas/CanvasView.tsx"), "utf8");
+const canvasSession = readFileSync(
+  resolve(root, "src/features/canvas/session/useCanvasSession.ts"),
+  "utf8",
+);
 const fluxNode = readFileSync(resolve(root, "src/features/canvas/FluxNode.tsx"), "utf8");
 const api = readFileSync(resolve(root, "src/lib/api.ts"), "utf8");
 
@@ -41,7 +45,9 @@ const requirements = [
   ],
   [
     "canvas test run saves the current graph before running the draft workflow",
-    /const executeDraftRun = useCallback[\s\S]*await save\(graphSignature\(nodes,\s*edges,\s*workflowTitle,\s*groups\)\)[\s\S]*runDraftExecution\(id, inputs,/,
+    (source) =>
+      /const executeDraftRun = useCallback[\s\S]*await saveNow\(\)[\s\S]*runDraftExecution\(id, inputs,/.test(source) &&
+      /const saveNow = useCallback[\s\S]*persist\(signatureRef\.current, "save"\)/.test(canvasSession),
     canvasView,
   ],
   [
