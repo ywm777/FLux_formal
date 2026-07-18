@@ -60,7 +60,6 @@ import { formatProductErrorMessage } from "../../lib/productError.js";
 import { defaultsFromSchema, toFormSchema } from "../../lib/schemaBridge.js";
 import {
   getWorkflowTemplate,
-  type WorkflowTemplateId,
 } from "../../lib/workflowTemplates.js";
 import { useCanvasStore } from "../../store/canvasStore.js";
 import { useAppStore } from "../../store/appStore.js";
@@ -158,7 +157,7 @@ function seedNodes(): Node<FluxNodeData>[] {
   return [];
 }
 
-function instantiateWorkflowTemplate(templateId: WorkflowTemplateId): {
+function instantiateWorkflowTemplate(templateId: string): {
   nodes: Node<FluxNodeData>[];
   edges: Edge[];
 } | null {
@@ -455,11 +454,12 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     };
   }, [nodes, edges]);
 
-  const resetCanvasDraft = useCallback(function resetCanvasDraft() {
+  const resetCanvasDraft = useCallback(function resetCanvasDraft(
+    templateId?: string,
+  ) {
     const freshNodes = seedNodes();
-    const requestedTemplateId = useCanvasStore.getState().templateId;
-    const templateGraph = requestedTemplateId
-      ? instantiateWorkflowTemplate(requestedTemplateId)
+    const templateGraph = templateId
+      ? instantiateWorkflowTemplate(templateId)
       : null;
     if (templateGraph) {
       freshNodes.splice(0, freshNodes.length, ...templateGraph.nodes);
@@ -557,6 +557,8 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     conflict,
     saveNow,
     publish: publishSession,
+    openWorkflow,
+    createDraft,
     keepLocalVersion,
     useStoredVersion,
   } = useCanvasSession({
@@ -1851,6 +1853,8 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     publish: onPublish,
     share: onShare,
     testRun: onTestRun,
+    openWorkflow,
+    createDraft,
   });
 
   const approvePausedRun = useCallback(

@@ -4,7 +4,6 @@ import type {
   WorkflowRecord,
   WorkflowStatus,
 } from "@flux/shared";
-import type { WorkflowTemplateId } from "../lib/workflowTemplates.js";
 
 export type SyncStatus = "idle" | "saving" | "saved" | "error";
 
@@ -39,16 +38,6 @@ interface CanvasState {
   insertNodeType: string | null;
   /** 重命名请求信号：命令面板触发后由画布打开临时重命名浮层 */
   renameWorkflowNonce: number;
-  /** 工作台请求打开到画布的指定工作流 */
-  openWorkflowId: string | null;
-  /** 指定工作流打开请求信号 */
-  openWorkflowNonce: number;
-  /** 新建工作流请求信号 */
-  newWorkflowNonce: number;
-  /** 新建请求是否尚未保存，组件重挂载期间继续保持空白画布 */
-  newWorkflowPending: boolean;
-  /** 从工作台快速开始时使用的起步方案 */
-  templateId: WorkflowTemplateId | null;
   setTitle: (title: string) => void;
   setVersion: (version: number) => void;
   setStatus: (status: SyncStatus, error?: string | null) => void;
@@ -56,21 +45,14 @@ interface CanvasState {
   setSharing: (sharing: boolean) => void;
   setTesting: (testing: boolean) => void;
   setRunProgress: (runProgress: CanvasRunProgress | null) => void;
+  /** 开始一个新的未保存草稿；这是状态转换，不是跨组件命令。 */
+  startDraft: (title: string) => void;
   /** 命令面板触发添加节点 */
   requestAddNode: () => void;
   /** 命令面板触发指定节点类型插入 */
   requestInsertNodeType: (nodeType: string) => void;
   /** 命令面板触发重命名工作流 */
   requestRenameWorkflow: () => void;
-  /** 工作台触发打开指定工作流到画布 */
-  requestOpenWorkflow: (workflowId: string) => void;
-  /** 工作台触发新建空白工作流 */
-  requestNewWorkflow: () => void;
-  /** 工作台触发从起步方案创建工作流 */
-  requestTemplateWorkflow: (
-    templateId: WorkflowTemplateId,
-    title: string,
-  ) => void;
   /** 保存/加载成功后同步服务端返回的 id 与 version */
   applyRecord: (record: Pick<WorkflowRecord, "id" | "version" | "title" | "status">) => void;
   reset: () => void;
@@ -93,11 +75,6 @@ const createCanvasStore = () => create<CanvasState>((set) => ({
   insertNodeNonce: 0,
   insertNodeType: null,
   renameWorkflowNonce: 0,
-  openWorkflowId: null,
-  openWorkflowNonce: 0,
-  newWorkflowNonce: 0,
-  newWorkflowPending: false,
-  templateId: null,
   setTitle: (title) =>
     set((state) => ({
       title,
@@ -110,6 +87,25 @@ const createCanvasStore = () => create<CanvasState>((set) => ({
   setSharing: (sharing) => set({ sharing }),
   setTesting: (testing) => set({ testing }),
   setRunProgress: (runProgress) => set({ runProgress }),
+  startDraft: (title) =>
+    set({
+      workflowId: null,
+      version: 0,
+      workflowStatus: null,
+      title: title.trim() || "未命名工作流",
+      titleDirty: false,
+      status: "idle",
+      error: null,
+      lastSavedAt: null,
+      publishing: false,
+      sharing: false,
+      testing: false,
+      runProgress: null,
+      addNodeNonce: 0,
+      insertNodeNonce: 0,
+      insertNodeType: null,
+      renameWorkflowNonce: 0,
+    }),
   requestAddNode: () => set((s) => ({ addNodeNonce: s.addNodeNonce + 1 })),
   requestInsertNodeType: (nodeType) =>
     set((s) => ({
@@ -118,60 +114,6 @@ const createCanvasStore = () => create<CanvasState>((set) => ({
     })),
   requestRenameWorkflow: () =>
     set((s) => ({ renameWorkflowNonce: s.renameWorkflowNonce + 1 })),
-  requestOpenWorkflow: (workflowId) =>
-    set((s) => ({
-      openWorkflowId: workflowId,
-      openWorkflowNonce: s.openWorkflowNonce + 1,
-      templateId: null,
-      newWorkflowPending: false,
-      runProgress: null,
-    })),
-  requestNewWorkflow: () =>
-    set((s) => ({
-      workflowId: null,
-      version: 0,
-      workflowStatus: null,
-      title: "未命名工作流",
-      titleDirty: false,
-      status: "idle",
-      error: null,
-      lastSavedAt: null,
-      publishing: false,
-      sharing: false,
-      testing: false,
-      runProgress: null,
-      addNodeNonce: 0,
-      insertNodeNonce: 0,
-      insertNodeType: null,
-      renameWorkflowNonce: 0,
-      openWorkflowId: null,
-      templateId: null,
-      newWorkflowNonce: s.newWorkflowNonce + 1,
-      newWorkflowPending: true,
-    })),
-  requestTemplateWorkflow: (templateId, title) =>
-    set((s) => ({
-      workflowId: null,
-      version: 0,
-      workflowStatus: null,
-      title,
-      titleDirty: false,
-      status: "idle",
-      error: null,
-      lastSavedAt: null,
-      publishing: false,
-      sharing: false,
-      testing: false,
-      runProgress: null,
-      addNodeNonce: 0,
-      insertNodeNonce: 0,
-      insertNodeType: null,
-      renameWorkflowNonce: 0,
-      openWorkflowId: null,
-      templateId,
-      newWorkflowNonce: s.newWorkflowNonce + 1,
-      newWorkflowPending: true,
-    })),
   applyRecord: (record) =>
     set({
       workflowId: record.id,
@@ -181,8 +123,6 @@ const createCanvasStore = () => create<CanvasState>((set) => ({
       titleDirty: false,
       status: "saved",
       error: null,
-      templateId: null,
-      newWorkflowPending: false,
       lastSavedAt: new Date().toISOString(),
     }),
   reset: () =>
@@ -203,11 +143,6 @@ const createCanvasStore = () => create<CanvasState>((set) => ({
       insertNodeNonce: 0,
       insertNodeType: null,
       renameWorkflowNonce: 0,
-      openWorkflowId: null,
-      openWorkflowNonce: 0,
-      newWorkflowNonce: 0,
-      newWorkflowPending: false,
-      templateId: null,
     }),
 }));
 

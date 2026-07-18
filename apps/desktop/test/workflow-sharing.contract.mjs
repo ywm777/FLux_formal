@@ -78,7 +78,7 @@ const requirements = [
     (source) =>
       /new URLSearchParams\(window\.location\.search\)\.get\("share"\)/.test(source) &&
       /onRequestLogin=/.test(source) &&
-      /requestOpenWorkflow\(workflowId\)/.test(source) &&
+      /workflowCommands\.openWorkflow\(workflowId\)/.test(source) &&
       /setMode\("canvas"\)/.test(source),
     app,
   ],

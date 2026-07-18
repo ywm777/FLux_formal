@@ -11,7 +11,7 @@ const titleBar = readFileSync(resolve(root, "src/components/TitleBar.tsx"), "utf
 const requirements = [
   [
     "workbench exposes a new-workflow launch action",
-    /function createWorkflow\(\)[\s\S]*requestNewWorkflow\(\)[\s\S]*setMode\("canvas"\)[\s\S]*aria-label="新建工作流"[\s\S]*onClick=\{createWorkflow\}/,
+    /function createWorkflow\(\)[\s\S]*workflowCommands\.createDraft\(\{ title: "未命名工作流" \}\)[\s\S]*setMode\("canvas"\)[\s\S]*aria-label="新建工作流"[\s\S]*onClick=\{createWorkflow\}/,
     workbenchView,
   ],
   [
@@ -21,7 +21,7 @@ const requirements = [
   ],
   [
     "workbench can open a workflow on the canvas",
-    /function openWorkflowOnCanvas\(workflowId: string\)[\s\S]*requestOpenWorkflow\(workflowId\)[\s\S]*setMode\("canvas"\)[\s\S]*aria-label=\{`打开 \$\{workflow\.title\}`\}[\s\S]*openWorkflowOnCanvas\(workflow\.id\)/,
+    /function openWorkflowOnCanvas\(workflowId: string\)[\s\S]*workflowCommands\.openWorkflow\(workflowId\)[\s\S]*setMode\("canvas"\)[\s\S]*aria-label=\{`打开 \$\{workflow\.title\}`\}[\s\S]*openWorkflowOnCanvas\(workflow\.id\)/,
     workbenchView,
   ],
   [

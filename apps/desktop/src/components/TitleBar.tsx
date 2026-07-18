@@ -65,7 +65,6 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
   const requestAddNode = useCanvasStore((s) => s.requestAddNode);
   const requestInsertNodeType = useCanvasStore((s) => s.requestInsertNodeType);
   const requestRenameWorkflow = useCanvasStore((s) => s.requestRenameWorkflow);
-  const requestNewWorkflow = useCanvasStore((s) => s.requestNewWorkflow);
   const authed = authStatus === "authenticated";
   const displayName = authed ? user?.displayName ?? "未命名用户" : "本地空间";
   const accountIdentity = authed
@@ -203,7 +202,7 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
 
     switch (item.id) {
       case "new-workflow":
-        requestNewWorkflow();
+        void workflowCommands.createDraft({ title: "未命名工作流" });
         setMode("canvas");
         break;
       case "add-node":

@@ -14,6 +14,14 @@ function handlers(
     publish: async () => { calls.push(`${prefix}:publish`); },
     share: async () => { calls.push(`${prefix}:share`); },
     testRun: async () => { calls.push(`${prefix}:test-run`); },
+    openWorkflow: async (workflowId) => {
+      calls.push(`${prefix}:open:${workflowId}`);
+    },
+    createDraft: async (input) => {
+      calls.push(
+        `${prefix}:create:${input.title}:${input.templateId ?? "blank"}`,
+      );
+    },
   };
 }
 
@@ -34,13 +42,55 @@ test("commands reach the active canvas session", async () => {
   await coordinator.commands.publish();
   await coordinator.commands.share();
   await coordinator.commands.testRun();
+  await coordinator.commands.openWorkflow("workflow-1");
+  await coordinator.commands.createDraft({ title: "Template", templateId: "t1" });
 
   assert.deepEqual(calls, [
     "active:save",
     "active:publish",
     "active:share",
     "active:test-run",
+    "active:open:workflow-1",
+    "active:create:Template:t1",
   ]);
+});
+
+test("navigation waits for a canvas session and is delivered after registration", async () => {
+  const calls: string[] = [];
+  const coordinator = createWorkflowCommandCoordinator();
+  let settled = false;
+  const pending = coordinator.commands.openWorkflow("late-workflow").then(() => {
+    settled = true;
+  });
+
+  await Promise.resolve();
+  assert.equal(settled, false);
+
+  coordinator.register(handlers(calls, "late"));
+  await pending;
+
+  assert.equal(settled, true);
+  assert.deepEqual(calls, ["late:open:late-workflow"]);
+});
+
+test("only the latest pending navigation intent is delivered", async () => {
+  const calls: string[] = [];
+  const coordinator = createWorkflowCommandCoordinator();
+  let supersededSettled = false;
+  const superseded = coordinator.commands
+    .createDraft({ title: "First" })
+    .then(() => {
+      supersededSettled = true;
+    });
+  const latest = coordinator.commands.openWorkflow("latest-workflow");
+
+  await superseded;
+  assert.equal(supersededSettled, true);
+
+  coordinator.register(handlers(calls, "active"));
+  await latest;
+
+  assert.deepEqual(calls, ["active:open:latest-workflow"]);
 });
 
 test("stale cleanup cannot disconnect a newer canvas session", async () => {
@@ -65,6 +115,8 @@ test("command failures propagate to the caller", async () => {
     publish: async () => undefined,
     share: async () => undefined,
     testRun: async () => undefined,
+    openWorkflow: async () => undefined,
+    createDraft: async () => undefined,
   });
 
   await assert.rejects(() => coordinator.commands.save(), failure);

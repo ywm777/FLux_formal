@@ -19,41 +19,40 @@ const workflowSession = readFileSync(
   resolve(root, "src/features/workspace/application/workflowSessionService.ts"),
   "utf8",
 );
+const workflowCommands = readFileSync(
+  resolve(root, "src/app/workflowCommandCoordinator.ts"),
+  "utf8",
+);
 
 const requirements = [
   [
-    "canvas store has an explicit new-workflow request signal",
-    /newWorkflowNonce:\s*number[\s\S]*requestNewWorkflow:\s*\(\) => void/,
-    canvasStore,
+    "workflow coordinator exposes a typed create-draft command",
+    /createDraft: \(input: CreateWorkflowDraftInput\) => Promise<void>[\s\S]*createDraft: \(input\) =>[\s\S]*handlers\.createDraft\(input\)/,
+    workflowCommands,
   ],
   [
-    "requestNewWorkflow resets draft identity and bumps a nonce",
-    /requestNewWorkflow:\s*\(\) =>\s*set\(\(s\) => \(\{[\s\S]*workflowId:\s*null[\s\S]*title:\s*"未命名工作流"[\s\S]*newWorkflowNonce:\s*s\.newWorkflowNonce \+ 1/,
+    "startDraft resets observable workflow identity without a command signal",
+    /startDraft: \(title: string\) => void[\s\S]*startDraft: \(title\) =>[\s\S]*workflowId: null[\s\S]*title: title\.trim\(\) \|\| "未命名工作流"/,
     canvasStore,
   ],
   [
     "workbench exposes a low-chrome new workflow action",
-    /const requestNewWorkflow = useCanvasStore\(\(s\) => s\.requestNewWorkflow\)[\s\S]*function createWorkflow\(\)[\s\S]*requestNewWorkflow\(\)[\s\S]*setMode\("canvas"\)[\s\S]*aria-label="新建工作流"[\s\S]*onClick=\{createWorkflow\}/,
+    /const workflowCommands = useWorkflowCommands\(\)[\s\S]*function createWorkflow\(\)[\s\S]*workflowCommands\.createDraft\(\{ title: "未命名工作流" \}\)[\s\S]*setMode\("canvas"\)[\s\S]*aria-label="新建工作流"[\s\S]*onClick=\{createWorkflow\}/,
     workbenchView,
   ],
   [
     "workbench keeps new workflow as a launch action instead of hydrating the current draft",
-    /function createWorkflow\(\)[\s\S]*requestNewWorkflow\(\)[\s\S]*setMode\("canvas"\)[\s\S]*aria-label="新建工作流"/,
+    /function createWorkflow\(\)[\s\S]*workflowCommands\.createDraft\([\s\S]*setMode\("canvas"\)[\s\S]*aria-label="新建工作流"/,
     workbenchView,
   ],
   [
-    "canvas session listens for new workflow requests while mounted",
-    /const newWorkflowNonce = useCanvasStore[\s\S]*seenNewWorkflowNonce[\s\S]*resetCanvasDraft\(\)/,
+    "canvas session creates drafts explicitly while mounted",
+    /const createDraft = useCallback[\s\S]*startDraft\(input\.title\)[\s\S]*resetCanvasDraft\(input\.templateId\)/,
     canvasSession,
   ],
   [
-    "initial canvas hydration honors a new-workflow request before loading latest",
-    /if \(request\.pendingNewWorkflow\) return \{ kind: "draft" \}[\s\S]*latestWorkflow\(await repository\.list\(\)\)/,
-    workflowSession,
-  ],
-  [
-    "stale hydration cannot overwrite a newer open or new-workflow request",
-    /const hydrationIsCurrent[\s\S]*current\.openWorkflowId === requestedWorkflowId[\s\S]*current\.openWorkflowNonce === hydrationOpenWorkflowNonce[\s\S]*current\.newWorkflowNonce === hydrationNewWorkflowNonce[\s\S]*cancelled \|\| !hydrationIsCurrent\(\)/,
+    "explicit drafts invalidate stale initial hydration",
+    /const requestVersion = sessionRequestVersionRef\.current[\s\S]*requestVersion !== sessionRequestVersionRef\.current[\s\S]*const createDraft = useCallback[\s\S]*sessionRequestVersionRef\.current \+= 1/,
     canvasSession,
   ],
   [
@@ -63,12 +62,12 @@ const requirements = [
   ],
   [
     "new workflow reset keeps templates populated and clears transient canvas surfaces",
-    /function resetCanvasDraft\(\)[\s\S]*const freshNodes = seedNodes\(\)[\s\S]*setNodes\(freshNodes\)[\s\S]*setEdges\(\[\]\)[\s\S]*setTestRunDetail\(null\)[\s\S]*setTestRunResult\(null\)[\s\S]*setTestRunError\(null\)[\s\S]*undoStackRef\.current = \[\]/,
+    /function resetCanvasDraft\([\s\S]*templateId\?: string[\s\S]*const freshNodes = seedNodes\(\)[\s\S]*setNodes\(freshNodes\)[\s\S]*setEdges\(\[\]\)[\s\S]*setTestRunDetail\(null\)[\s\S]*setTestRunResult\(null\)[\s\S]*setTestRunError\(null\)[\s\S]*undoStackRef\.current = \[\]/,
     canvasView,
   ],
   [
     "new workflow reset forces the empty or templated graph to autosave",
-    /const FORCE_AUTOSAVE_SIGNATURE[\s\S]*resetCanvasDraft\(\)[\s\S]*lastSignatureRef\.current = FORCE_AUTOSAVE_SIGNATURE/,
+    /const FORCE_AUTOSAVE_SIGNATURE[\s\S]*resetCanvasDraft\(input\.templateId\)[\s\S]*lastSignatureRef\.current = FORCE_AUTOSAVE_SIGNATURE/,
     canvasSession,
   ],
   [
@@ -83,6 +82,11 @@ const forbidden = [
     "workbench does not hydrate or edit current canvas state",
     /workflowApi\.list\(\)[\s\S]*getLatestWorkflowSummary|setCanvasTitle|工作流名称/,
     workbenchView,
+  ],
+  [
+    "canvas store does not carry new-workflow command signals",
+    /newWorkflowNonce|newWorkflowPending|requestNewWorkflow|requestTemplateWorkflow|templateId/,
+    canvasStore,
   ],
 ];
 

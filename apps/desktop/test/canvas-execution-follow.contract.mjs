@@ -27,7 +27,7 @@ const fluxNode = readFileSync(
 const requirements = [
   [
     "workbench opens the selected workflow without starting it",
-    /openWorkflowOnCanvas\(workflowId: string\)[\s\S]*requestOpenWorkflow\(workflowId\)[\s\S]*setMode\("canvas"\)/,
+    /openWorkflowOnCanvas\(workflowId: string\)[\s\S]*workflowCommands\.openWorkflow\(workflowId\)[\s\S]*setMode\("canvas"\)/,
     workbenchView,
   ],
   [

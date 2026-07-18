@@ -51,7 +51,7 @@ const requirements = [
   ],
   [
     "command selection dispatches through existing product actions",
-    /function onCommandSelect\(item: CommandItem\)[\s\S]*requestNewWorkflow\(\)[\s\S]*requestAddNode\(\)[\s\S]*requestRenameWorkflow\(\)[\s\S]*workflowCommands\.testRun\(\)[\s\S]*workflowCommands\.publish\(\)/,
+    /function onCommandSelect\(item: CommandItem\)[\s\S]*workflowCommands\.createDraft\([\s\S]*requestAddNode\(\)[\s\S]*requestRenameWorkflow\(\)[\s\S]*workflowCommands\.testRun\(\)[\s\S]*workflowCommands\.publish\(\)/,
     titleBar,
   ],
   [

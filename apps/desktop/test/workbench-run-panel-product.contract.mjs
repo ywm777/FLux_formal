@@ -29,7 +29,7 @@ const requirements = [
   ],
   [
     "workbench transfers the user to the selected canvas without running it",
-    /function openWorkflowOnCanvas\(workflowId: string\)[\s\S]*requestOpenWorkflow\(workflowId\)[\s\S]*setMode\("canvas"\)/,
+    /function openWorkflowOnCanvas\(workflowId: string\)[\s\S]*workflowCommands\.openWorkflow\(workflowId\)[\s\S]*setMode\("canvas"\)/,
     workbenchView,
   ],
   [

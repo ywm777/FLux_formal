@@ -24,6 +24,11 @@ const requirements = [
     /export function useRegisterWorkflowCommands[\s\S]*handlersRef\.current = handlers[\s\S]*coordinator\.register/,
     provider,
   ],
+  [
+    "the provider forwards workflow navigation arguments to the latest handlers",
+    /openWorkflow: \(workflowId\) =>\s*handlersRef\.current\.openWorkflow\(workflowId\)[\s\S]*createDraft: \(input\) => handlersRef\.current\.createDraft\(input\)/,
+    provider,
+  ],
 ];
 
 const missing = requirements

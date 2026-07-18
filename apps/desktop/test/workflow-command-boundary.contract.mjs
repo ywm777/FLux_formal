@@ -6,6 +6,8 @@ const read = (path) => readFileSync(resolve(root, path), "utf8");
 const titleBar = read("src/components/TitleBar.tsx");
 const canvas = read("src/features/canvas/CanvasView.tsx");
 const store = read("src/store/canvasStore.ts");
+const app = read("src/App.tsx");
+const workbench = read("src/features/workbench/WorkbenchView.tsx");
 
 const requirements = [
   [
@@ -28,6 +30,23 @@ const requirements = [
     /useRegisterWorkflowCommands\(\{[\s\S]*publish: onPublish[\s\S]*share: onShare[\s\S]*testRun: onTestRun/,
     canvas,
   ],
+  [
+    "workbench opens and creates workflows through typed commands",
+    /const workflowCommands = useWorkflowCommands\(\)[\s\S]*workflowCommands\.createDraft\([\s\S]*workflowCommands\.openWorkflow\(workflowId\)/,
+    workbench,
+  ],
+  [
+    "title bar and shared-copy flow use the same navigation commands",
+    (source) =>
+      /workflowCommands\.createDraft\(/.test(titleBar) &&
+      /workflowCommands\.openWorkflow\(workflowId\)/.test(source),
+    app,
+  ],
+  [
+    "active canvas session registers workflow navigation handlers",
+    /useRegisterWorkflowCommands\(\{[\s\S]*openWorkflow[\s\S]*createDraft/,
+    canvas,
+  ],
 ];
 
 const forbidden = [
@@ -43,10 +62,19 @@ const forbidden = [
     /publishNonce|shareNonce|testRunNonce|seenShareNonce|seenTestRunNonce/,
     canvas,
   ],
+  [
+    "canvas state does not carry workflow navigation commands",
+    /openWorkflowId|openWorkflowNonce|newWorkflowNonce|newWorkflowPending|templateId|requestOpenWorkflow|requestNewWorkflow|requestTemplateWorkflow/,
+    store,
+  ],
 ];
 
 const missing = requirements
-  .filter(([, pattern, source]) => !pattern.test(source))
+  .filter(([, requirement, source]) =>
+    typeof requirement === "function"
+      ? !requirement(source)
+      : !requirement.test(source),
+  )
   .map(([label]) => label);
 const presentForbidden = forbidden
   .filter(([, pattern, source]) => pattern.test(source))

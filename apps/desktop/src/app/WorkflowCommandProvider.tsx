@@ -51,6 +51,9 @@ export function useRegisterWorkflowCommands(
       publish: () => handlersRef.current.publish(),
       share: () => handlersRef.current.share(),
       testRun: () => handlersRef.current.testRun(),
+      openWorkflow: (workflowId) =>
+        handlersRef.current.openWorkflow(workflowId),
+      createDraft: (input) => handlersRef.current.createDraft(input),
     }),
     [coordinator],
   );

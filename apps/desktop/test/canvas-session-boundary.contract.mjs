@@ -30,12 +30,16 @@ const requirements = [
     sessionHook,
   ],
   [
-    "session hook owns restore, autosave, and version conflict lifecycle",
+    "session hook owns initial restore, autosave, and version conflict lifecycle",
     (source) =>
-      /openWorkflowNonce/.test(source) &&
-      /newWorkflowNonce/.test(source) &&
+      /session\.restore/.test(source) &&
       /AUTOSAVE_DEBOUNCE_MS/.test(source) &&
       /WorkflowVersionConflictError/.test(source),
+    sessionHook,
+  ],
+  [
+    "session controller exposes race-safe explicit workflow navigation",
+    /sessionRequestVersionRef[\s\S]*const openWorkflow = useCallback[\s\S]*session\.open\(workflowId\)[\s\S]*const createDraft = useCallback/,
     sessionHook,
   ],
 ];
@@ -55,6 +59,11 @@ const forbidden = [
     "canvas does not call concrete workspace persistence methods",
     /\.get\(openWorkflowId\)|\.create\(workflowTitle|\.update\(store\.workflowId|\.publish\(id\)/,
     canvas,
+  ],
+  [
+    "canvas session does not consume navigation command counters",
+    /openWorkflowNonce|newWorkflowNonce|seenOpenWorkflowNonce|seenNewWorkflowNonce|newWorkflowPending/,
+    sessionHook,
   ],
 ];
 

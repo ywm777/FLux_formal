@@ -7,6 +7,7 @@ import {
 } from "react";
 import { AUTOSAVE_DEBOUNCE_MS, type WorkflowRecord } from "@flux/shared";
 import { useWorkspaceRepository } from "../../../app/WorkspaceServiceProvider.js";
+import type { CreateWorkflowDraftInput } from "../../../app/workflowCommandCoordinator.js";
 import { formatProductErrorMessage } from "../../../lib/productError.js";
 import { useCanvasStore } from "../../../store/canvasStore.js";
 import {
@@ -29,13 +30,15 @@ export interface UseCanvasSessionOptions {
     record: WorkflowRecord,
     preserveDirtyTitle?: boolean,
   ) => string | null;
-  resetCanvasDraft: () => void;
+  resetCanvasDraft: (templateId?: string) => void;
 }
 
 export interface CanvasSessionController {
   conflict: CanvasSessionConflict | null;
   saveNow: () => Promise<WorkflowRecord | null>;
   publish: () => Promise<WorkflowRecord | null>;
+  openWorkflow: (workflowId: string) => Promise<void>;
+  createDraft: (input: CreateWorkflowDraftInput) => Promise<void>;
   keepLocalVersion: () => Promise<void>;
   useStoredVersion: () => Promise<void>;
 }
@@ -58,11 +61,8 @@ export function useCanvasSession({
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const signatureRef = useRef(signature);
   const wasActiveRef = useRef(active);
+  const sessionRequestVersionRef = useRef(0);
   signatureRef.current = signature;
-
-  const openWorkflowId = useCanvasStore((state) => state.openWorkflowId);
-  const openWorkflowNonce = useCanvasStore((state) => state.openWorkflowNonce);
-  const newWorkflowNonce = useCanvasStore((state) => state.newWorkflowNonce);
 
   const acceptRecord = useCallback(
     (record: WorkflowRecord, preserveDirtyTitle = false) => {
@@ -131,36 +131,28 @@ export function useCanvasSession({
 
   useEffect(() => {
     let cancelled = false;
+    const requestVersion = sessionRequestVersionRef.current;
     void (async () => {
       try {
-        const hydrationState = useCanvasStore.getState();
-        const requestedWorkflowId = hydrationState.openWorkflowId;
-        const hydrationOpenWorkflowNonce = hydrationState.openWorkflowNonce;
-        const hydrationNewWorkflowNonce = hydrationState.newWorkflowNonce;
-        const hydrationIsCurrent = () => {
-          const current = useCanvasStore.getState();
-          return (
-            current.openWorkflowId === requestedWorkflowId &&
-            current.openWorkflowNonce === hydrationOpenWorkflowNonce &&
-            current.newWorkflowNonce === hydrationNewWorkflowNonce
-          );
-        };
         const result = await session.restore({
-          requestedWorkflowId,
-          pendingNewWorkflow: hydrationState.newWorkflowPending,
+          requestedWorkflowId: null,
+          pendingNewWorkflow: false,
         });
-        if (cancelled || !hydrationIsCurrent()) return;
+        if (
+          cancelled ||
+          requestVersion !== sessionRequestVersionRef.current
+        ) return;
 
         if (result.kind === "record") {
           acceptRecord(result.record, result.preserveDirtyTitle);
-        } else if (result.kind === "draft") {
-          resetCanvasDraft();
-          lastSignatureRef.current = FORCE_AUTOSAVE_SIGNATURE;
         }
       } catch {
         // Authentication and transient network failures preserve the seed graph.
       } finally {
-        if (!cancelled) {
+        if (
+          !cancelled &&
+          requestVersion === sessionRequestVersionRef.current
+        ) {
           if (!lastSignatureRef.current) {
             lastSignatureRef.current = signatureRef.current;
           }
@@ -173,43 +165,37 @@ export function useCanvasSession({
     };
   }, [acceptRecord, resetCanvasDraft, session]);
 
-  const seenOpenWorkflowNonce = useRef(openWorkflowNonce);
-  useEffect(() => {
-    if (openWorkflowNonce === seenOpenWorkflowNonce.current) return;
-    seenOpenWorkflowNonce.current = openWorkflowNonce;
-    if (!openWorkflowId) return;
-
-    let cancelled = false;
-    readyRef.current = false;
-    void session
-      .open(openWorkflowId)
-      .then((record) => {
-        if (!cancelled) acceptRecord(record);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        useCanvasStore
-          .getState()
-          .setStatus("error", formatProductErrorMessage(error, "打开工作流失败"));
-      })
-      .finally(() => {
-        if (!cancelled) readyRef.current = true;
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [acceptRecord, openWorkflowId, openWorkflowNonce, session]);
-
-  const seenNewWorkflowNonce = useRef(newWorkflowNonce);
-  useEffect(() => {
-    if (newWorkflowNonce === seenNewWorkflowNonce.current) return;
-    seenNewWorkflowNonce.current = newWorkflowNonce;
+  const openWorkflow = useCallback(async (workflowId: string) => {
+    const requestVersion = ++sessionRequestVersionRef.current;
     cancelAutosave();
-    resetCanvasDraft();
+    setConflict(null);
+    readyRef.current = false;
+    try {
+      const record = await session.open(workflowId);
+      if (requestVersion === sessionRequestVersionRef.current) {
+        acceptRecord(record);
+      }
+    } catch (error) {
+      if (requestVersion !== sessionRequestVersionRef.current) return;
+      useCanvasStore
+        .getState()
+        .setStatus("error", formatProductErrorMessage(error, "打开工作流失败"));
+    } finally {
+      if (requestVersion === sessionRequestVersionRef.current) {
+        readyRef.current = true;
+      }
+    }
+  }, [acceptRecord, cancelAutosave, session]);
+
+  const createDraft = useCallback(async (input: CreateWorkflowDraftInput) => {
+    sessionRequestVersionRef.current += 1;
+    cancelAutosave();
+    setConflict(null);
+    useCanvasStore.getState().startDraft(input.title);
+    resetCanvasDraft(input.templateId);
     lastSignatureRef.current = FORCE_AUTOSAVE_SIGNATURE;
     readyRef.current = true;
-  }, [cancelAutosave, newWorkflowNonce, resetCanvasDraft]);
+  }, [cancelAutosave, resetCanvasDraft]);
 
   useEffect(() => {
     if (!readyRef.current || signature === lastSignatureRef.current) return;
@@ -237,11 +223,15 @@ export function useCanvasSession({
   }, [conflict, saveNow]);
 
   const useStoredVersion = useCallback(async () => {
+    const requestVersion = ++sessionRequestVersionRef.current;
     setConflict(null);
     const workflowId = useCanvasStore.getState().workflowId;
     if (!workflowId) return;
     try {
-      acceptRecord(await session.open(workflowId));
+      const record = await session.open(workflowId);
+      if (requestVersion === sessionRequestVersionRef.current) {
+        acceptRecord(record);
+      }
     } catch (error) {
       useCanvasStore
         .getState()
@@ -256,6 +246,8 @@ export function useCanvasSession({
     conflict,
     saveNow,
     publish,
+    openWorkflow,
+    createDraft,
     keepLocalVersion,
     useStoredVersion,
   };

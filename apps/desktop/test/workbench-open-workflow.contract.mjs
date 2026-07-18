@@ -19,21 +19,25 @@ const workflowSession = readFileSync(
   resolve(root, "src/features/workspace/application/workflowSessionService.ts"),
   "utf8",
 );
+const workflowCommands = readFileSync(
+  resolve(root, "src/app/workflowCommandCoordinator.ts"),
+  "utf8",
+);
 
 const requirements = [
   [
-    "canvas store keeps a specific workflow-open request instead of relying on latest workflow",
-    /openWorkflowId:\s*string \| null[\s\S]*openWorkflowNonce:\s*number[\s\S]*requestOpenWorkflow:\s*\(workflowId: string\) => void/,
-    canvasStore,
+    "workflow coordinator exposes a typed open-workflow command",
+    /openWorkflow: \(workflowId: string\) => Promise<void>[\s\S]*openWorkflow: \(workflowId\) =>[\s\S]*handlers\.openWorkflow\(workflowId\)/,
+    workflowCommands,
   ],
   [
-    "requestOpenWorkflow records the workflow id and bumps a nonce",
-    /requestOpenWorkflow:\s*\(workflowId\) =>\s*set\(\(s\) => \(\{[\s\S]*openWorkflowId:\s*workflowId[\s\S]*openWorkflowNonce:\s*s\.openWorkflowNonce \+ 1/,
-    canvasStore,
+    "workflow coordinator queues navigation until a canvas registers",
+    /pendingNavigation[\s\S]*function navigate[\s\S]*register\(handlers\)[\s\S]*queued\.execute\(handlers\)/,
+    workflowCommands,
   ],
   [
     "workbench row body opens a specific workflow on the canvas",
-    /const requestOpenWorkflow = useCanvasStore\(\(s\) => s\.requestOpenWorkflow\)[\s\S]*function openWorkflowOnCanvas\(workflowId: string\)[\s\S]*requestOpenWorkflow\(workflowId\)[\s\S]*setMode\("canvas"\)[\s\S]*aria-label=\{`打开 \$\{workflow\.title\}`\}[\s\S]*openWorkflowOnCanvas\(workflow\.id\)/,
+    /const workflowCommands = useWorkflowCommands\(\)[\s\S]*function openWorkflowOnCanvas\(workflowId: string\)[\s\S]*workflowCommands\.openWorkflow\(workflowId\)[\s\S]*setMode\("canvas"\)[\s\S]*aria-label=\{`打开 \$\{workflow\.title\}`\}[\s\S]*openWorkflowOnCanvas\(workflow\.id\)/,
     workbenchView,
   ],
   [
@@ -42,24 +46,36 @@ const requirements = [
     canvasView,
   ],
   [
-    "initial canvas hydration prefers a requested workflow id before falling back to latest",
-    /if \(request\.requestedWorkflowId\)[\s\S]*repository\.get\(request\.requestedWorkflowId\)[\s\S]*latestWorkflow\(await repository\.list\(\)\)/,
+    "initial canvas hydration restores the latest workflow",
+    /latestWorkflow\(await repository\.list\(\)\)[\s\S]*repository\.get\(latest\.id\)/,
     workflowSession,
   ],
   [
-    "canvas session listens for later open-workflow requests while mounted",
-    /const openWorkflowId = useCanvasStore[\s\S]*const openWorkflowNonce = useCanvasStore[\s\S]*seenOpenWorkflowNonce[\s\S]*session[\s\S]*\.open\(openWorkflowId\)[\s\S]*acceptRecord\(record\)/,
+    "canvas session handles explicit open-workflow commands with race protection",
+    /const openWorkflow = useCallback[\s\S]*\+\+sessionRequestVersionRef\.current[\s\S]*session\.open\(workflowId\)[\s\S]*acceptRecord\(record\)/,
     canvasSession,
+  ],
+];
+
+const forbidden = [
+  [
+    "canvas store does not carry open-workflow commands",
+    /openWorkflowId|openWorkflowNonce|requestOpenWorkflow/,
+    canvasStore,
   ],
 ];
 
 const missing = requirements
   .filter(([, pattern, source]) => !pattern.test(source))
   .map(([label]) => label);
+const presentForbidden = forbidden
+  .filter(([, pattern, source]) => pattern.test(source))
+  .map(([label]) => label);
 
-if (missing.length > 0) {
+if (missing.length > 0 || presentForbidden.length > 0) {
   console.error(`Missing ${missing.length} workbench open-workflow requirement(s):`);
   for (const label of missing) console.error(`- ${label}`);
+  for (const label of presentForbidden) console.error(`- ${label}`);
   process.exit(1);
 }
 
