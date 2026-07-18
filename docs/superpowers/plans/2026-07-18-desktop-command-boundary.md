@@ -307,9 +307,15 @@ export function createWorkflowCommandCoordinator(): WorkflowCommandCoordinator {
 }
 ```
 
-- [ ] **Step 4: Add the repeatable desktop unit-test script**
+- [ ] **Step 4: Declare ESM semantics and add the repeatable desktop unit-test script**
 
-Add this entry to `apps/desktop/package.json` under `scripts`:
+Add this top-level field after `private` in `apps/desktop/package.json` so Node and Vite use the same ES Module semantics as the source:
+
+```json
+"type": "module"
+```
+
+Add this entry under `scripts`:
 
 ```json
 "test:unit": "node --test test/workflow-command-coordinator.test.mts"
@@ -324,7 +330,7 @@ pnpm --filter @flux/desktop test:unit
 pnpm --filter @flux/desktop typecheck
 ```
 
-Expected: four coordinator tests pass and desktop typecheck exits `0`.
+Expected: four coordinator tests pass without `MODULE_TYPELESS_PACKAGE_JSON`, and desktop typecheck exits `0`.
 
 - [ ] **Step 6: Commit the pure coordinator**
 

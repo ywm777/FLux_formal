@@ -2,11 +2,13 @@
   "name": "@flux/desktop",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Flux 桌面端（Tauri 2 + React + Vite）",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "node --test test/workflow-command-coordinator.test.mts",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
