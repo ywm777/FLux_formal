@@ -104,7 +104,10 @@ import {
   isEditableShortcutTarget,
   matchesShortcut,
 } from "../../lib/keyboardShortcuts.js";
-import { useRegisterWorkflowCommands } from "../../app/WorkflowCommandProvider.js";
+import {
+  useRegisterWorkflowCommands,
+  useWorkflowCommands,
+} from "../../app/WorkflowCommandProvider.js";
 
 let counter = 0;
 const nextId = () => `n${++counter}`;
@@ -364,6 +367,7 @@ function compileCanvasExecutionOrder(
 }
 
 export function CanvasView({ active = true }: { active?: boolean }) {
+  const workflowCommands = useWorkflowCommands();
   const [nodes, setNodes] = useNodesState<Node<FluxNodeData>>(
     seedNodes(),
   );
@@ -1724,7 +1728,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
         event.preventDefault();
         const store = useCanvasStore.getState();
         if (!store.testing && !store.publishing && store.status !== "saving") {
-          store.requestTestRun();
+          void workflowCommands.testRun();
         }
         return;
       }
@@ -1833,6 +1837,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     workflowTitle,
     groups,
     save,
+    workflowCommands,
     renameOpen,
     paletteOpen,
     menu,
@@ -2055,44 +2060,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     const signature = graphSignature(nodes, edges, workflowTitle, groups);
     if (signature !== lastSig.current) void saveRef.current(signature);
   }, [active, nodes, edges, workflowTitle, groups]);
-
-  // 顶栏触发发布：监听 publishNonce 信号（用 ref 保持最新闭包，避免节点变化误触发）
-  const publishRef = useRef(onPublish);
-  useEffect(() => {
-    publishRef.current = onPublish;
-  }, [onPublish]);
-  const publishNonce = useCanvasStore((s) => s.publishNonce);
-  const seenNonce = useRef(publishNonce);
-  useEffect(() => {
-    if (publishNonce === seenNonce.current) return;
-    seenNonce.current = publishNonce;
-    void publishRef.current();
-  }, [publishNonce]);
-
-  const shareRef = useRef(onShare);
-  useEffect(() => {
-    shareRef.current = onShare;
-  }, [onShare]);
-  const shareNonce = useCanvasStore((s) => s.shareNonce);
-  const seenShareNonce = useRef(shareNonce);
-  useEffect(() => {
-    if (shareNonce === seenShareNonce.current) return;
-    seenShareNonce.current = shareNonce;
-    void shareRef.current();
-  }, [shareNonce]);
-
-  // 顶栏是唯一执行入口；画布只保留节点和连线上的执行反馈。
-  const testRunRef = useRef(onTestRun);
-  useEffect(() => {
-    testRunRef.current = onTestRun;
-  }, [onTestRun]);
-  const testRunNonce = useCanvasStore((s) => s.testRunNonce);
-  const seenTestRunNonce = useRef(testRunNonce);
-  useEffect(() => {
-    if (testRunNonce === seenTestRunNonce.current) return;
-    seenTestRunNonce.current = testRunNonce;
-    void testRunRef.current();
-  }, [testRunNonce]);
 
   const seenAddNodeNonce = useRef(addNodeNonce);
   useEffect(() => {

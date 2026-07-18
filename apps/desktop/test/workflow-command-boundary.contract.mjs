@@ -18,11 +18,31 @@ const requirements = [
     /useRegisterWorkflowCommands\(\{[\s\S]*save: async \(\) =>[\s\S]*save\(graphSignature\(nodes, edges, workflowTitle, groups\)\)/,
     canvas,
   ],
+  [
+    "title bar publishes, shares, and runs through workflow commands",
+    /workflowCommands\.testRun\(\)[\s\S]*workflowCommands\.publish\(\)[\s\S]*workflowCommands\.share\(\)/,
+    titleBar,
+  ],
+  [
+    "the active canvas session owns publish, share, and test-run handlers",
+    /useRegisterWorkflowCommands\(\{[\s\S]*publish: onPublish[\s\S]*share: onShare[\s\S]*testRun: onTestRun/,
+    canvas,
+  ],
 ];
 
 const forbidden = [
   ["canvas state does not carry save commands", /saveNonce|requestSave/, store],
   ["canvas does not listen for save command counters", /saveNonce|seenSaveNonce/, canvas],
+  [
+    "canvas state does not carry workflow action commands",
+    /publishNonce|shareNonce|testRunNonce|requestPublish|requestShare|requestTestRun/,
+    store,
+  ],
+  [
+    "canvas does not listen for workflow action counters",
+    /publishNonce|shareNonce|testRunNonce|seenShareNonce|seenTestRunNonce/,
+    canvas,
+  ],
 ];
 
 const missing = requirements

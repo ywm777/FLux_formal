@@ -32,12 +32,6 @@ interface CanvasState {
   testing: boolean;
   /** 供顶部栏显示的精简运行进度；画布本身不渲染悬浮状态条 */
   runProgress: CanvasRunProgress | null;
-  /** 发布请求信号：顶栏点击发布时自增，由画布监听并执行 */
-  publishNonce: number;
-  /** 分享请求信号：顶栏点击分享时自增，由画布监听并打开分享弹窗 */
-  shareNonce: number;
-  /** 执行请求信号：顶栏点击执行时自增，由画布监听并执行 */
-  testRunNonce: number;
   /** 添加节点请求信号：命令面板触发后由画布打开本地节点选择器 */
   addNodeNonce: number;
   /** 指定节点类型插入请求：命令面板直接选择节点类型时使用 */
@@ -62,12 +56,6 @@ interface CanvasState {
   setSharing: (sharing: boolean) => void;
   setTesting: (testing: boolean) => void;
   setRunProgress: (runProgress: CanvasRunProgress | null) => void;
-  /** 顶栏触发发布 */
-  requestPublish: () => void;
-  /** 顶栏触发分享 */
-  requestShare: () => void;
-  /** 顶栏触发工作流执行 */
-  requestTestRun: () => void;
   /** 命令面板触发添加节点 */
   requestAddNode: () => void;
   /** 命令面板触发指定节点类型插入 */
@@ -101,9 +89,6 @@ const createCanvasStore = () => create<CanvasState>((set) => ({
   sharing: false,
   testing: false,
   runProgress: null,
-  publishNonce: 0,
-  shareNonce: 0,
-  testRunNonce: 0,
   addNodeNonce: 0,
   insertNodeNonce: 0,
   insertNodeType: null,
@@ -125,9 +110,6 @@ const createCanvasStore = () => create<CanvasState>((set) => ({
   setSharing: (sharing) => set({ sharing }),
   setTesting: (testing) => set({ testing }),
   setRunProgress: (runProgress) => set({ runProgress }),
-  requestPublish: () => set((s) => ({ publishNonce: s.publishNonce + 1 })),
-  requestShare: () => set((s) => ({ shareNonce: s.shareNonce + 1 })),
-  requestTestRun: () => set((s) => ({ testRunNonce: s.testRunNonce + 1 })),
   requestAddNode: () => set((s) => ({ addNodeNonce: s.addNodeNonce + 1 })),
   requestInsertNodeType: (nodeType) =>
     set((s) => ({

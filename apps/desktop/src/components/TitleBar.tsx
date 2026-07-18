@@ -62,9 +62,6 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
   const runProgress = useCanvasStore((s) => s.runProgress);
   const saving = useCanvasStore((s) => s.status === "saving");
   const canvasName = useCanvasStore((s) => s.title);
-  const requestPublish = useCanvasStore((s) => s.requestPublish);
-  const requestShare = useCanvasStore((s) => s.requestShare);
-  const requestTestRun = useCanvasStore((s) => s.requestTestRun);
   const requestAddNode = useCanvasStore((s) => s.requestAddNode);
   const requestInsertNodeType = useCanvasStore((s) => s.requestInsertNodeType);
   const requestRenameWorkflow = useCanvasStore((s) => s.requestRenameWorkflow);
@@ -216,16 +213,16 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
         requestRenameWorkflow();
         break;
       case "test-run":
-        if (!testRunDisabled) requestTestRun();
+        if (!testRunDisabled) void workflowCommands.testRun();
         break;
       case "save":
         if (!saveDisabled) void workflowCommands.save();
         break;
       case "publish":
-        if (!publishDisabled) requestPublish();
+        if (!publishDisabled) void workflowCommands.publish();
         break;
       case "share":
-        if (!shareDisabled) requestShare();
+        if (!shareDisabled) void workflowCommands.share();
         break;
       case "open-canvas":
         setMode("canvas");
@@ -560,7 +557,7 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
                   className="titlebar-primary-action"
                   aria-label={testing ? "工作流执行中" : "执行工作流"}
                   aria-keyshortcuts="Control+Enter Meta+Enter"
-                  onClick={() => requestTestRun()}
+                  onClick={() => void workflowCommands.testRun()}
                   disabled={testRunDisabled}
                   title={`执行工作流 (${shortcutLabel("run-preview")})`}
                   style={{
@@ -601,7 +598,7 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
                     type="button"
                     className="titlebar-secondary-action"
                     aria-label={publishing ? "发布中" : "发布工作流"}
-                    onClick={() => requestPublish()}
+                    onClick={() => void workflowCommands.publish()}
                     disabled={publishDisabled}
                     title="发布工作流"
                     style={{
@@ -649,7 +646,7 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
                       disabled={shareDisabled}
                       onClick={() => {
                         setWorkflowMenuOpen(false);
-                        requestShare();
+                        void workflowCommands.share();
                       }}
                       style={workflowMenuItem}
                     >
