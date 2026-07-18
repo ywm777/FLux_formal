@@ -12,6 +12,9 @@ export interface WorkflowCommandHandlers {
   testRun: WorkflowCommandHandler;
   openWorkflow: (workflowId: string) => void | Promise<void>;
   createDraft: (input: CreateWorkflowDraftInput) => void | Promise<void>;
+  addNode: WorkflowCommandHandler;
+  insertNodeType: (nodeType: string) => void | Promise<void>;
+  renameWorkflow: WorkflowCommandHandler;
 }
 
 export interface WorkflowCommands {
@@ -21,6 +24,9 @@ export interface WorkflowCommands {
   testRun: () => Promise<void>;
   openWorkflow: (workflowId: string) => Promise<void>;
   createDraft: (input: CreateWorkflowDraftInput) => Promise<void>;
+  addNode: () => Promise<void>;
+  insertNodeType: (nodeType: string) => Promise<void>;
+  renameWorkflow: () => Promise<void>;
 }
 
 export interface WorkflowCommandCoordinator {
@@ -37,7 +43,13 @@ export function createWorkflowCommandCoordinator(): WorkflowCommandCoordinator {
   } | null = null;
 
   async function invoke(
-    command: "save" | "publish" | "share" | "testRun",
+    command:
+      | "save"
+      | "publish"
+      | "share"
+      | "testRun"
+      | "addNode"
+      | "renameWorkflow",
   ): Promise<void> {
     await activeHandlers?.[command]();
   }
@@ -64,6 +76,11 @@ export function createWorkflowCommandCoordinator(): WorkflowCommandCoordinator {
       navigate((handlers) => handlers.openWorkflow(workflowId)),
     createDraft: (input) =>
       navigate((handlers) => handlers.createDraft(input)),
+    addNode: () => invoke("addNode"),
+    insertNodeType: async (nodeType) => {
+      await activeHandlers?.insertNodeType(nodeType);
+    },
+    renameWorkflow: () => invoke("renameWorkflow"),
   };
 
   return {

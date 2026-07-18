@@ -51,23 +51,23 @@ const requirements = [
   ],
   [
     "command selection dispatches through existing product actions",
-    /function onCommandSelect\(item: CommandItem\)[\s\S]*workflowCommands\.createDraft\([\s\S]*requestAddNode\(\)[\s\S]*requestRenameWorkflow\(\)[\s\S]*workflowCommands\.testRun\(\)[\s\S]*workflowCommands\.publish\(\)/,
+    /function onCommandSelect\(item: CommandItem\)[\s\S]*workflowCommands\.createDraft\([\s\S]*workflowCommands\.addNode\(\)[\s\S]*workflowCommands\.renameWorkflow\(\)[\s\S]*workflowCommands\.testRun\(\)[\s\S]*workflowCommands\.publish\(\)/,
     titleBar,
   ],
   [
-    "canvas store exposes command request signals for add-node and rename",
-    /addNodeNonce:\s*number[\s\S]*renameWorkflowNonce:\s*number[\s\S]*requestAddNode:\s*\(\) => void[\s\S]*requestRenameWorkflow:\s*\(\) => void/,
+    "canvas registers direct add-node and rename handlers",
+    /useRegisterWorkflowCommands\(\{[\s\S]*addNode: addNodeFromCommand[\s\S]*renameWorkflow: openWorkflowRename/,
+    canvasView,
+  ],
+  [
+    "direct add-node handling opens the local node palette at screen center",
+    /const addNodeFromCommand = useCallback[\s\S]*openNodePaletteAtScreenPoint\(\{[\s\S]*window\.innerWidth \/ 2[\s\S]*window\.innerHeight \/ 2/,
+    canvasView,
+  ],
+  [
+    "canvas store remains observable state instead of a command bus",
+    /startDraft: \(title: string\) => void[\s\S]*applyRecord:/,
     canvasStore,
-  ],
-  [
-    "canvas listens for command-triggered add-node requests and opens the local node palette",
-    /const addNodeNonce = useCanvasStore\(\(s\) => s\.addNodeNonce\)[\s\S]*seenAddNodeNonce[\s\S]*openNodePaletteAtScreenPoint\(\{[\s\S]*window\.innerWidth \/ 2[\s\S]*window\.innerHeight/,
-    canvasView,
-  ],
-  [
-    "canvas listens for command-triggered rename requests and opens the rename drawer",
-    /const renameWorkflowNonce = useCanvasStore\(\(s\) => s\.renameWorkflowNonce\)[\s\S]*seenRenameWorkflowNonce[\s\S]*openWorkflowRename\(\)/,
-    canvasView,
   ],
 ];
 
@@ -81,6 +81,11 @@ const forbidden = [
     "global command palette does not replace the contextual canvas node palette",
     /import \{ CommandPalette[\s\S]*from "@flux\/ui"[\s\S]*<CommandPalette/,
     canvasView,
+  ],
+  [
+    "canvas store does not carry editing command signals",
+    /addNodeNonce|insertNodeNonce|renameWorkflowNonce|requestAddNode|requestInsertNodeType|requestRenameWorkflow/,
+    canvasStore,
   ],
 ];
 

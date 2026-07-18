@@ -54,6 +54,10 @@ export function useRegisterWorkflowCommands(
       openWorkflow: (workflowId) =>
         handlersRef.current.openWorkflow(workflowId),
       createDraft: (input) => handlersRef.current.createDraft(input),
+      addNode: () => handlersRef.current.addNode(),
+      insertNodeType: (nodeType) =>
+        handlersRef.current.insertNodeType(nodeType),
+      renameWorkflow: () => handlersRef.current.renameWorkflow(),
     }),
     [coordinator],
   );

@@ -31,13 +31,6 @@ interface CanvasState {
   testing: boolean;
   /** 供顶部栏显示的精简运行进度；画布本身不渲染悬浮状态条 */
   runProgress: CanvasRunProgress | null;
-  /** 添加节点请求信号：命令面板触发后由画布打开本地节点选择器 */
-  addNodeNonce: number;
-  /** 指定节点类型插入请求：命令面板直接选择节点类型时使用 */
-  insertNodeNonce: number;
-  insertNodeType: string | null;
-  /** 重命名请求信号：命令面板触发后由画布打开临时重命名浮层 */
-  renameWorkflowNonce: number;
   setTitle: (title: string) => void;
   setVersion: (version: number) => void;
   setStatus: (status: SyncStatus, error?: string | null) => void;
@@ -47,12 +40,6 @@ interface CanvasState {
   setRunProgress: (runProgress: CanvasRunProgress | null) => void;
   /** 开始一个新的未保存草稿；这是状态转换，不是跨组件命令。 */
   startDraft: (title: string) => void;
-  /** 命令面板触发添加节点 */
-  requestAddNode: () => void;
-  /** 命令面板触发指定节点类型插入 */
-  requestInsertNodeType: (nodeType: string) => void;
-  /** 命令面板触发重命名工作流 */
-  requestRenameWorkflow: () => void;
   /** 保存/加载成功后同步服务端返回的 id 与 version */
   applyRecord: (record: Pick<WorkflowRecord, "id" | "version" | "title" | "status">) => void;
   reset: () => void;
@@ -71,10 +58,6 @@ const createCanvasStore = () => create<CanvasState>((set) => ({
   sharing: false,
   testing: false,
   runProgress: null,
-  addNodeNonce: 0,
-  insertNodeNonce: 0,
-  insertNodeType: null,
-  renameWorkflowNonce: 0,
   setTitle: (title) =>
     set((state) => ({
       title,
@@ -101,19 +84,7 @@ const createCanvasStore = () => create<CanvasState>((set) => ({
       sharing: false,
       testing: false,
       runProgress: null,
-      addNodeNonce: 0,
-      insertNodeNonce: 0,
-      insertNodeType: null,
-      renameWorkflowNonce: 0,
     }),
-  requestAddNode: () => set((s) => ({ addNodeNonce: s.addNodeNonce + 1 })),
-  requestInsertNodeType: (nodeType) =>
-    set((s) => ({
-      insertNodeNonce: s.insertNodeNonce + 1,
-      insertNodeType: nodeType,
-    })),
-  requestRenameWorkflow: () =>
-    set((s) => ({ renameWorkflowNonce: s.renameWorkflowNonce + 1 })),
   applyRecord: (record) =>
     set({
       workflowId: record.id,
@@ -139,10 +110,6 @@ const createCanvasStore = () => create<CanvasState>((set) => ({
       sharing: false,
       testing: false,
       runProgress: null,
-      addNodeNonce: 0,
-      insertNodeNonce: 0,
-      insertNodeType: null,
-      renameWorkflowNonce: 0,
     }),
 }));
 

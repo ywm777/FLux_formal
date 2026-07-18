@@ -29,6 +29,11 @@ const requirements = [
     /openWorkflow: \(workflowId\) =>\s*handlersRef\.current\.openWorkflow\(workflowId\)[\s\S]*createDraft: \(input\) => handlersRef\.current\.createDraft\(input\)/,
     provider,
   ],
+  [
+    "the provider forwards canvas editing commands to the latest handlers",
+    /addNode: \(\) => handlersRef\.current\.addNode\(\)[\s\S]*insertNodeType: \(nodeType\) =>\s*handlersRef\.current\.insertNodeType\(nodeType\)[\s\S]*renameWorkflow: \(\) => handlersRef\.current\.renameWorkflow\(\)/,
+    provider,
+  ],
 ];
 
 const missing = requirements

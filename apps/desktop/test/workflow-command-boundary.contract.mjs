@@ -67,6 +67,11 @@ const forbidden = [
     /openWorkflowId|openWorkflowNonce|newWorkflowNonce|newWorkflowPending|templateId|requestOpenWorkflow|requestNewWorkflow|requestTemplateWorkflow/,
     store,
   ],
+  [
+    "canvas state contains no command counters",
+    /\w+Nonce|requestAddNode|requestInsertNodeType|requestRenameWorkflow/,
+    store,
+  ],
 ];
 
 const missing = requirements

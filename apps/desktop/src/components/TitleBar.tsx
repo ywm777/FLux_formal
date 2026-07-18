@@ -62,9 +62,6 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
   const runProgress = useCanvasStore((s) => s.runProgress);
   const saving = useCanvasStore((s) => s.status === "saving");
   const canvasName = useCanvasStore((s) => s.title);
-  const requestAddNode = useCanvasStore((s) => s.requestAddNode);
-  const requestInsertNodeType = useCanvasStore((s) => s.requestInsertNodeType);
-  const requestRenameWorkflow = useCanvasStore((s) => s.requestRenameWorkflow);
   const authed = authStatus === "authenticated";
   const displayName = authed ? user?.displayName ?? "未命名用户" : "本地空间";
   const accountIdentity = authed
@@ -196,7 +193,7 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
 
   function onCommandSelect(item: CommandItem) {
     if (item.id.startsWith("node:")) {
-      requestInsertNodeType(item.id.slice("node:".length));
+      void workflowCommands.insertNodeType(item.id.slice("node:".length));
       return;
     }
 
@@ -206,10 +203,10 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
         setMode("canvas");
         break;
       case "add-node":
-        requestAddNode();
+        void workflowCommands.addNode();
         break;
       case "rename-workflow":
-        requestRenameWorkflow();
+        void workflowCommands.renameWorkflow();
         break;
       case "test-run":
         if (!testRunDisabled) void workflowCommands.testRun();
@@ -471,7 +468,7 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
           className="titlebar-canvas-name"
           aria-label={`重命名工作流：${canvasName}`}
           title="重命名工作流"
-          onClick={() => requestRenameWorkflow()}
+          onClick={() => void workflowCommands.renameWorkflow()}
           style={canvasNameButton}
         >
           <span style={canvasNameText}>{canvasName}</span>

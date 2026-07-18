@@ -422,10 +422,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
   const workflowId = useCanvasStore((s) => s.workflowId);
   const setWorkflowTitle = useCanvasStore((s) => s.setTitle);
   const testRunDisplay = testRunDetail ?? testRunResult;
-  const addNodeNonce = useCanvasStore((s) => s.addNodeNonce);
-  const insertNodeNonce = useCanvasStore((s) => s.insertNodeNonce);
-  const insertNodeType = useCanvasStore((s) => s.insertNodeType);
-  const renameWorkflowNonce = useCanvasStore((s) => s.renameWorkflowNonce);
 
   const scheduleFitView = useCallback(() => {
     fitViewRequestedRef.current = true;
@@ -1846,6 +1842,26 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     await executeDraftRun(inputs);
   }, [nodes, edges, executeDraftRun]);
 
+  const addNodeFromCommand = useCallback(() => {
+    openNodePaletteAtScreenPoint({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+  }, [openNodePaletteAtScreenPoint]);
+
+  const insertNodeFromCommand = useCallback((nodeType: string) => {
+    const position = rf.current?.screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    }) ?? { x: 160, y: 160 };
+    insertPos.current = position;
+    insertSourceId.current = null;
+    setPaletteOpen(false);
+    setPaletteAnchor(null);
+    setMenu(null);
+    insertNode(nodeType, position);
+  }, [insertNode]);
+
   useRegisterWorkflowCommands({
     save: async () => {
       await saveNow();
@@ -1855,6 +1871,9 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     testRun: onTestRun,
     openWorkflow,
     createDraft,
+    addNode: addNodeFromCommand,
+    insertNodeType: insertNodeFromCommand,
+    renameWorkflow: openWorkflowRename,
   });
 
   const approvePausedRun = useCallback(
@@ -1894,41 +1913,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     },
     [applyNodeRunState, testRunDetail, testRunResult],
   );
-
-  const seenAddNodeNonce = useRef(addNodeNonce);
-  useEffect(() => {
-    if (addNodeNonce === seenAddNodeNonce.current) return;
-    seenAddNodeNonce.current = addNodeNonce;
-    openNodePaletteAtScreenPoint({
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2,
-    });
-  }, [addNodeNonce, openNodePaletteAtScreenPoint]);
-
-  const seenInsertNodeNonce = useRef(insertNodeNonce);
-  useEffect(() => {
-    if (insertNodeNonce === seenInsertNodeNonce.current) return;
-    seenInsertNodeNonce.current = insertNodeNonce;
-    if (!insertNodeType) return;
-
-    const pos = rf.current?.screenToFlowPosition({
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2,
-    }) ?? { x: 160, y: 160 };
-    insertPos.current = pos;
-    insertSourceId.current = null;
-    setPaletteOpen(false);
-    setPaletteAnchor(null);
-    setMenu(null);
-    insertNode(insertNodeType, pos);
-  }, [insertNodeNonce, insertNodeType, insertNode]);
-
-  const seenRenameWorkflowNonce = useRef(renameWorkflowNonce);
-  useEffect(() => {
-    if (renameWorkflowNonce === seenRenameWorkflowNonce.current) return;
-    seenRenameWorkflowNonce.current = renameWorkflowNonce;
-    openWorkflowRename();
-  }, [renameWorkflowNonce, openWorkflowRename]);
 
   const canvasRunProgress = useMemo(() => {
     const total = testRunDisplay?.order.length || nodes.length;

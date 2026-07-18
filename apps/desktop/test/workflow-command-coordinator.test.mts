@@ -22,6 +22,11 @@ function handlers(
         `${prefix}:create:${input.title}:${input.templateId ?? "blank"}`,
       );
     },
+    addNode: async () => { calls.push(`${prefix}:add-node`); },
+    insertNodeType: async (nodeType) => {
+      calls.push(`${prefix}:insert:${nodeType}`);
+    },
+    renameWorkflow: async () => { calls.push(`${prefix}:rename`); },
   };
 }
 
@@ -31,6 +36,9 @@ test("commands are harmless before a canvas session registers", async () => {
   await coordinator.commands.publish();
   await coordinator.commands.share();
   await coordinator.commands.testRun();
+  await coordinator.commands.addNode();
+  await coordinator.commands.insertNodeType("flux.action.log");
+  await coordinator.commands.renameWorkflow();
 });
 
 test("commands reach the active canvas session", async () => {
@@ -44,6 +52,9 @@ test("commands reach the active canvas session", async () => {
   await coordinator.commands.testRun();
   await coordinator.commands.openWorkflow("workflow-1");
   await coordinator.commands.createDraft({ title: "Template", templateId: "t1" });
+  await coordinator.commands.addNode();
+  await coordinator.commands.insertNodeType("flux.action.log");
+  await coordinator.commands.renameWorkflow();
 
   assert.deepEqual(calls, [
     "active:save",
@@ -52,6 +63,9 @@ test("commands reach the active canvas session", async () => {
     "active:test-run",
     "active:open:workflow-1",
     "active:create:Template:t1",
+    "active:add-node",
+    "active:insert:flux.action.log",
+    "active:rename",
   ]);
 });
 
@@ -117,6 +131,9 @@ test("command failures propagate to the caller", async () => {
     testRun: async () => undefined,
     openWorkflow: async () => undefined,
     createDraft: async () => undefined,
+    addNode: async () => undefined,
+    insertNodeType: async () => undefined,
+    renameWorkflow: async () => undefined,
   });
 
   await assert.rejects(() => coordinator.commands.save(), failure);
