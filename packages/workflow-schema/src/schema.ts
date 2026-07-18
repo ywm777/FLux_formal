@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** 当前持久化工作流文档格式版本；与工作流修订号 version 相互独立。 */
+export const CURRENT_WORKFLOW_SCHEMA_VERSION = 1 as const;
+
 /** 端口定义 */
 export const PortSchema = z.object({
   id: z.string(),
@@ -44,6 +47,7 @@ export type Viewport = z.infer<typeof ViewportSchema>;
 
 /** 工作流图（序列化 JSON 根结构） */
 export const WorkflowGraphSchema = z.object({
+  schemaVersion: z.literal(CURRENT_WORKFLOW_SCHEMA_VERSION),
   id: z.string(),
   version: z.number().int().nonnegative().default(0),
   viewport: ViewportSchema.default({ x: 0, y: 0, zoom: 1 }),

@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { migrateGraphDocument } from "./migrations.js";
 import { WorkflowGraphSchema, type WorkflowGraph } from "./schema.js";
 
 export interface GraphIssue {
@@ -9,12 +11,34 @@ export interface GraphIssue {
 
 /** 解析并标准化（应用默认值），失败时抛出 ZodError */
 export function parseGraph(input: unknown): WorkflowGraph {
-  return WorkflowGraphSchema.parse(input);
+  try {
+    return WorkflowGraphSchema.parse(migrateGraphDocument(input));
+  } catch (error) {
+    if (error instanceof z.ZodError) throw error;
+    throw migrationZodError(error);
+  }
 }
 
 /** 安全解析，返回 success 标志 */
 export function safeParseGraph(input: unknown) {
-  return WorkflowGraphSchema.safeParse(input);
+  try {
+    return WorkflowGraphSchema.safeParse(migrateGraphDocument(input));
+  } catch (error) {
+    return {
+      success: false as const,
+      error: migrationZodError(error),
+    };
+  }
+}
+
+function migrationZodError(error: unknown): z.ZodError {
+  return new z.ZodError([
+    {
+      code: z.ZodIssueCode.custom,
+      path: ["schemaVersion"],
+      message: error instanceof Error ? error.message : "工作流格式迁移失败",
+    },
+  ]);
 }
 
 /**
