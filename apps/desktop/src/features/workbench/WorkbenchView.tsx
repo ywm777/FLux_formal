@@ -19,12 +19,8 @@ import {
   shortcutLabel,
 } from "../../lib/keyboardShortcuts.js";
 import { useWorkspaceStore } from "../../store/workspaceStore.js";
-import { workspaceRepository } from "../../lib/workspaceRepository.js";
-import {
-  downloadFluxWorkflow,
-  parseFluxWorkflowFile,
-} from "../../lib/workflowFile.js";
 import { useWorkflowCommands } from "../../app/WorkflowCommandProvider.js";
+import { useWorkbenchService } from "../../app/WorkspaceServiceProvider.js";
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -50,6 +46,7 @@ function formatDate(value: string): string {
 export function WorkbenchView({ active = true }: { active?: boolean }) {
   const setMode = useAppStore((s) => s.setMode);
   const workflowCommands = useWorkflowCommands();
+  const workbenchService = useWorkbenchService();
   const workflows = useTasksStore((s) => s.workflows);
   const loading = useTasksStore((s) => s.loading);
   const error = useTasksStore((s) => s.error);
@@ -107,7 +104,7 @@ export function WorkbenchView({ active = true }: { active?: boolean }) {
     setContextMenu(null);
     setFileError(null);
     try {
-      downloadFluxWorkflow(await workspaceRepository.get(workflowId));
+      await workbenchService.exportWorkflow(workflowId);
     } catch (failure) {
       setFileError(
         failure instanceof Error ? failure.message : "导出工作流失败",
@@ -121,12 +118,7 @@ export function WorkbenchView({ active = true }: { active?: boolean }) {
     if (!file) return;
     setFileError(null);
     try {
-      const imported = parseFluxWorkflowFile(await file.text());
-      const record = await workspaceRepository.importLocal({
-        title: imported.title,
-        tags: imported.tags,
-        graph: imported.graph,
-      });
+      const record = await workbenchService.importWorkflow(await file.text());
       await setWorkspaceKind("local");
       void workflowCommands.openWorkflow(record.id);
       setMode("canvas");

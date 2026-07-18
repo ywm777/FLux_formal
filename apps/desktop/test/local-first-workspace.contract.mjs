@@ -11,6 +11,12 @@ const localRepository = readDesktop("src/lib/localWorkspaceRepository.ts");
 const localExecution = readDesktop("src/lib/localExecution.ts");
 const executionGateway = readDesktop("src/lib/executionGateway.ts");
 const workbench = readDesktop("src/features/workbench/WorkbenchView.tsx");
+const workbenchService = readDesktop(
+  "src/features/workbench/application/workbenchService.ts",
+);
+const workflowFileAdapter = readDesktop(
+  "src/infrastructure/browser/workflowFileAdapter.ts",
+);
 const titleBar = readDesktop("src/components/TitleBar.tsx");
 const canvas = readDesktop("src/features/canvas/CanvasView.tsx");
 const workflowCommands = readDesktop("src/app/WorkflowCommandProvider.tsx");
@@ -102,8 +108,12 @@ const requirements = [
     (source) =>
       /本地空间/.test(source) &&
       /accept="\.flux/.test(source) &&
-      /parseFluxWorkflowFile/.test(source) &&
-      /downloadFluxWorkflow/.test(source),
+      /workbenchService\.importWorkflow/.test(source) &&
+      /workbenchService\.exportWorkflow/.test(source) &&
+      /repository\.importLocal/.test(workbenchService) &&
+      /repository\.get/.test(workbenchService) &&
+      /parseFluxWorkflowFile/.test(workflowFileAdapter) &&
+      /downloadFluxWorkflow/.test(workflowFileAdapter),
     workbench,
   ],
   [
