@@ -10,9 +10,6 @@ import {
   type SaveWorkflowPatch,
 } from "../features/workspace/application/workspaceRepositoryPort.js";
 
-/** @deprecated Canvas session migration keeps this import-compatible alias temporarily. */
-export { WorkflowVersionConflictError as LocalWorkflowVersionConflictError } from "../features/workspace/application/workspaceRepositoryPort.js";
-
 const STORAGE_KEY = "local-workspace";
 const LOCAL_OWNER_ID = "local-user";
 const LOCAL_WORKSPACE_ID = "local";
