@@ -66,6 +66,10 @@ const requirements = [
   [
     "public preview is structurally read-only and preserves visible execution order",
     (source) =>
+      /useSharingService/.test(source) &&
+      /void sharingService[\s\S]*\.getShared\(shareId\)/.test(source) &&
+      /sharingService\.copyShared/.test(source) &&
+      !/workflowApi/.test(source) &&
       /nodesDraggable=\{false\}/.test(source) &&
       /nodesConnectable=\{false\}/.test(source) &&
       /elementsSelectable=\{false\}/.test(source) &&
@@ -85,8 +89,8 @@ const requirements = [
   [
     "public and copied graphs remove private connection configuration",
     (source) =>
-      /sanitizeSharedGraph\(record\.graph\)/.test(source) &&
-      /copyGraph\(this\.sanitizeSharedGraph\(source\.graph\)/.test(source) &&
+      /sanitizeSharedGraph\(this\.normalizeGraph\(record\.graph\)\)/.test(source) &&
+      /copyGraph\([\s\S]*sanitizeSharedGraph\(this\.normalizeGraph\(source\.graph\)\)/.test(source) &&
       /PRIVATE_CONFIG_KEYS/.test(source),
     service,
   ],

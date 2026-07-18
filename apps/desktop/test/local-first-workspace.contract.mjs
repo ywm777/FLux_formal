@@ -23,6 +23,12 @@ const workflowCommands = readDesktop("src/app/WorkflowCommandProvider.tsx");
 const canvasSession = readDesktop("src/features/canvas/session/useCanvasSession.ts");
 const workflowSession = readDesktop("src/features/workspace/application/workflowSessionService.ts");
 const shareDialog = readDesktop("src/features/sharing/ShareWorkflowDialog.tsx");
+const sharingService = readDesktop(
+  "src/features/sharing/application/sharingService.ts",
+);
+const cloudSharingAdapter = readDesktop(
+  "src/infrastructure/cloud/cloudWorkflowSharingAdapter.ts",
+);
 const runtime = readFileSync(
   resolve(repositoryRoot, "packages/workflow-runtime/src/runtime.ts"),
   "utf8",
@@ -142,7 +148,12 @@ const requirements = [
     "local sharing exports files or uploads an explicit cloud copy",
     (source) =>
       /导出 \.flux/.test(source) &&
-      /cloudWorkflowApi\.create/.test(source) &&
+      /sharingService\.exportWorkflow/.test(source) &&
+      /sharingService\.enableShare/.test(source) &&
+      /repository\.get/.test(sharingService) &&
+      /cloud\.createWorkflow/.test(sharingService) &&
+      /files\.download/.test(sharingService) &&
+      /cloudWorkflowApi\.create/.test(cloudSharingAdapter) &&
       /登录后在线分享/.test(source) &&
       /requestCloudAccess\("share"\)/.test(source),
     shareDialog,
