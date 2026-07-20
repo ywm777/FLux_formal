@@ -87,6 +87,7 @@ import {
 } from "./connection/policy.js";
 import { useCanvasConnectionController } from "./connection/useCanvasConnectionController.js";
 import { useCanvasSelectionController } from "./selection/useCanvasSelectionController.js";
+import { useCanvasHistoryController } from "./history/useCanvasHistoryController.js";
 import {
   createFluxNode,
   fromWorkflowGraph,
@@ -107,7 +108,6 @@ let counter = 0;
 const nextId = () => `n${++counter}`;
 let groupCounter = 0;
 const nextGroupId = () => `group-${++groupCounter}`;
-const MAX_HISTORY_DEPTH = 80;
 const NODE_COLLISION_X = 330;
 const NODE_COLLISION_Y = 170;
 const NODE_SPACING_X = 380;
@@ -116,9 +116,6 @@ const NODE_SPACING_Y = 190;
 interface GraphSnapshot {
   nodes: Node<FluxNodeData>[];
   edges: Edge[];
-  selectedId: string | null;
-  selectedNodeIds: string[];
-  selectedGroupId: string | null;
   groups: CanvasGroup[];
 }
 
@@ -229,17 +226,11 @@ function cloneConfig(config: Record<string, unknown>): Record<string, unknown> {
   }
 }
 
-function cloneGraphSnapshot(
-  nodes: Node<FluxNodeData>[],
-  edges: Edge[],
-  selectedId: string | null,
-  selectedNodeIds: string[],
-  selectedGroupId: string | null,
-  groups: CanvasGroup[],
-): GraphSnapshot {
+function cloneGraphSnapshot(snapshot: GraphSnapshot): GraphSnapshot {
   return {
-    nodes: nodes.map((node): Node<FluxNodeData> => ({
+    nodes: snapshot.nodes.map((node): Node<FluxNodeData> => ({
       ...node,
+      selected: false,
       position: { ...node.position },
       data: {
         ...node.data,
@@ -247,17 +238,23 @@ function cloneGraphSnapshot(
         outputs: node.data.outputs.map((output) => ({ ...output })),
         config: cloneConfig(node.data.config),
         actions: undefined,
+        run: undefined,
       },
     })),
-    edges: edges.map((edge) => ({ ...edge })),
-    selectedId,
-    selectedNodeIds: [...selectedNodeIds],
-    selectedGroupId,
-    groups: groups.map((group) => ({
+    edges: snapshot.edges.map((edge) => ({ ...edge, selected: false })),
+    groups: snapshot.groups.map((group) => ({
       ...group,
       nodeIds: [...group.nodeIds],
     })),
   };
+}
+
+function equalGraphSnapshots(
+  left: GraphSnapshot,
+  right: GraphSnapshot,
+): boolean {
+  return graphSignature(left.nodes, left.edges, "", left.groups) ===
+    graphSignature(right.nodes, right.edges, "", right.groups);
 }
 
 function getExecutionDisplayId(
@@ -374,6 +371,17 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     edgeId: selectedEdgeId,
     inspectingNodeId: inspectingId,
   } = selection.state;
+  const historyValue = useMemo<GraphSnapshot>(
+    () => ({ nodes, edges, groups }),
+    [nodes, edges, groups],
+  );
+  const history = useCanvasHistoryController({
+    value: historyValue,
+    clone: cloneGraphSnapshot,
+    equals: equalGraphSnapshots,
+    limit: 80,
+  });
+  const recordHistory = history.record;
   const [error, setError] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteAnchor, setPaletteAnchor] = useState<{ x: number; y: number } | null>(null);
@@ -401,12 +409,9 @@ export function CanvasView({ active = true }: { active?: boolean }) {
   const applyRecord = useCanvasStore((s) => s.applyRecord);
   const testing = useCanvasStore((s) => s.testing);
 
-  const undoStackRef = useRef<GraphSnapshot[]>([]);
-  const redoStackRef = useRef<GraphSnapshot[]>([]);
   const fitViewRequestedRef = useRef(false);
   const fitViewTimerRef = useRef<number | null>(null);
   const playbackTokenRef = useRef(0);
-  const nodeDragHistoryRef = useRef(false);
   const selectedEdgeDragRef = useRef<Edge | null>(null);
   const edgeIdCounterRef = useRef(0);
   const suppressNodeSelectionUntilRef = useRef(0);
@@ -464,11 +469,11 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     if (templateGraph) {
       freshNodes.splice(0, freshNodes.length, ...templateGraph.nodes);
     }
+    const freshEdges = templateGraph?.edges ?? [];
     bumpCounter(freshNodes);
     setNodes(freshNodes);
-    setEdges([]);
+    setEdges(freshEdges);
     setGroups([]);
-    if (templateGraph) setEdges(templateGraph.edges);
     selection.reset();
     setPaletteOpen(false);
     setPaletteAnchor(null);
@@ -481,10 +486,15 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     setMenu(null);
     insertPos.current = null;
     insertSourceId.current = null;
-    undoStackRef.current = [];
-    redoStackRef.current = [];
+    history.reset({ nodes: freshNodes, edges: freshEdges, groups: [] });
     scheduleFitView();
-  }, [setNodes, setEdges, scheduleFitView, selection.reset]);
+  }, [
+    setNodes,
+    setEdges,
+    scheduleFitView,
+    selection.reset,
+    history.reset,
+  ]);
 
   const applyWorkflowRecordToCanvas = useCallback(
     (record: WorkflowRecord, preserveDirtyTitle = false) => {
@@ -511,8 +521,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       setPaletteOpen(false);
       setPaletteAnchor(null);
       setMenu(null);
-      undoStackRef.current = [];
-      redoStackRef.current = [];
+      history.reset({ nodes: ln, edges: le, groups: loadedGroups });
       const loadedSignature = graphSignature(
         ln,
         le,
@@ -526,7 +535,14 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       scheduleFitView();
       return loadedSignature;
     },
-    [applyRecord, setNodes, setEdges, scheduleFitView, selection.reset],
+    [
+      applyRecord,
+      setNodes,
+      setEdges,
+      scheduleFitView,
+      selection.reset,
+      history.reset,
+    ],
   );
 
   const signature = useMemo(
@@ -561,65 +577,28 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     signature,
   });
 
-  const recordHistory = useCallback(() => {
-    undoStackRef.current.push(cloneGraphSnapshot(
-      nodes,
-      edges,
-      selectedId,
-      selectedNodeIds,
-      selectedGroupId,
-      groups,
-    ));
-    if (undoStackRef.current.length > MAX_HISTORY_DEPTH) {
-      undoStackRef.current.shift();
-    }
-    redoStackRef.current = [];
-  }, [nodes, edges, selectedId, selectedNodeIds, selectedGroupId, groups]);
-
   const restoreGraphSnapshot = useCallback(
     (snapshot: GraphSnapshot) => {
       setNodes(snapshot.nodes);
       setEdges(snapshot.edges);
       setGroups(snapshot.groups);
-      selection.restoreGraphSelection({
-        nodeIds: snapshot.selectedNodeIds,
-        primaryNodeId: snapshot.selectedId,
-        groupId: snapshot.selectedGroupId,
-      });
+      selection.clearCanvas();
       setPaletteOpen(false);
       setPaletteAnchor(null);
       setMenu(null);
     },
-    [setNodes, setEdges, selection.restoreGraphSelection],
+    [setNodes, setEdges, selection.clearCanvas],
   );
 
-  const undoGraph = useCallback(function undoGraph() {
-    const previous = undoStackRef.current.pop();
-    if (!previous) return;
-    redoStackRef.current.push(cloneGraphSnapshot(
-      nodes,
-      edges,
-      selectedId,
-      selectedNodeIds,
-      selectedGroupId,
-      groups,
-    ));
-    restoreGraphSnapshot(previous);
-  }, [nodes, edges, selectedId, selectedNodeIds, selectedGroupId, groups, restoreGraphSnapshot]);
+  const undoGraph = useCallback(() => {
+    const snapshot = history.undo();
+    if (snapshot) restoreGraphSnapshot(snapshot);
+  }, [history.undo, restoreGraphSnapshot]);
 
-  const redoGraph = useCallback(function redoGraph() {
-    const next = redoStackRef.current.pop();
-    if (!next) return;
-    undoStackRef.current.push(cloneGraphSnapshot(
-      nodes,
-      edges,
-      selectedId,
-      selectedNodeIds,
-      selectedGroupId,
-      groups,
-    ));
-    restoreGraphSnapshot(next);
-  }, [nodes, edges, selectedId, selectedNodeIds, selectedGroupId, groups, restoreGraphSnapshot]);
+  const redoGraph = useCallback(() => {
+    const snapshot = history.redo();
+    if (snapshot) restoreGraphSnapshot(snapshot);
+  }, [history.redo, restoreGraphSnapshot]);
 
   const clearNodeRunState = useCallback(function clearNodeRunState() {
     setNodes((current) => {
@@ -656,10 +635,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
   const onCanvasNodesChange = useCallback(
     (changes: NodeChange<Node<FluxNodeData>>[]) => {
       const graphChanges = changes.filter(isGraphChangingNodeChange);
-      const shouldRecordHistory = graphChanges.some(
-        (change) => change.type !== "position" || !nodeDragHistoryRef.current,
-      );
-      if (shouldRecordHistory) recordHistory();
+      if (graphChanges.length > 0) recordHistory();
       if (changes.some(isExecutionAffectingNodeChange)) clearStaleRunState();
       setNodes((current) => applyNodeChanges(changes, current));
     },
@@ -1163,7 +1139,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     event.preventDefault();
     event.stopPropagation();
     selectGroup(group);
-    recordHistory();
+    history.beginTransaction();
     event.currentTarget.setPointerCapture(event.pointerId);
     const groupNodeIds = new Set(group.nodeIds);
     groupDragRef.current = {
@@ -1178,7 +1154,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
           .map((node) => [node.id, { ...node.position }]),
       ),
     };
-  }, [nodes, recordHistory, selectGroup]);
+  }, [nodes, history.beginTransaction, selectGroup]);
 
   const moveGroup = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
     const drag = groupDragRef.current;
@@ -1210,7 +1186,8 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     groupDragRef.current = null;
-  }, []);
+    history.endTransaction();
+  }, [history.endTransaction]);
 
   const resetNodeSize = useCallback((nodeId: string) => {
     recordHistory();
@@ -2101,14 +2078,8 @@ export function CanvasView({ active = true }: { active?: boolean }) {
             selectionMode={SelectionMode.Partial}
             panOnDrag={[1, 2]}
             multiSelectionKeyCode={["Control", "Meta", "Shift"]}
-            onNodeDragStart={() => {
-              if (nodeDragHistoryRef.current) return;
-              recordHistory();
-              nodeDragHistoryRef.current = true;
-            }}
-            onNodeDragStop={() => {
-              nodeDragHistoryRef.current = false;
-            }}
+            onNodeDragStart={history.beginTransaction}
+            onNodeDragStop={history.endTransaction}
             onNodeClick={(event, node) => {
               const endpointDropEdgeId = selectedEdgeDragRef.current?.id ?? null;
               if (
