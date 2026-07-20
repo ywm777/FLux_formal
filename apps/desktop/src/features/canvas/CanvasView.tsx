@@ -88,16 +88,13 @@ import {
 import { useCanvasConnectionController } from "./connection/useCanvasConnectionController.js";
 import { useCanvasSelectionController } from "./selection/useCanvasSelectionController.js";
 import { useCanvasHistoryController } from "./history/useCanvasHistoryController.js";
+import { useCanvasKeyboardController } from "./keyboard/useCanvasKeyboardController.js";
 import {
   createFluxNode,
   fromWorkflowGraph,
   graphSignature,
   toWorkflowGraph,
 } from "./graphBridge.js";
-import {
-  isEditableShortcutTarget,
-  matchesShortcut,
-} from "../../lib/keyboardShortcuts.js";
 import {
   useRegisterWorkflowCommands,
   useWorkflowCommands,
@@ -1456,181 +1453,75 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     connectionController.draft,
   ]);
 
-  useEffect(() => {
-    if (!active) return;
+  const closeRenameFromKeyboard = useCallback(() => {
+    setRenameOpen(false);
+  }, []);
 
-    function onCanvasKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented) return;
+  const closePaletteFromKeyboard = useCallback(() => {
+    setPaletteOpen(false);
+    setPaletteAnchor(null);
+  }, []);
 
-      if (matchesShortcut(event, "close-layer")) {
-        event.preventDefault();
-        if (renameOpen) {
-          setRenameOpen(false);
-          return;
-        }
-        if (paletteOpen) {
-          setPaletteOpen(false);
-          setPaletteAnchor(null);
-          return;
-        }
-        if (menu) {
-          setMenu(null);
-          return;
-        }
-        if (inspectingId) {
-          selection.closeInspector();
-          return;
-        }
-        selectedEdgeDragRef.current = null;
-        selection.clearCanvas();
-        return;
-      }
+  const closeMenuFromKeyboard = useCallback(() => {
+    setMenu(null);
+  }, []);
 
-      if (
-        isEditableShortcutTarget(event.target) ||
-        isEditableShortcutTarget(document.activeElement)
-      ) return;
+  const clearSelectionFromKeyboard = useCallback(() => {
+    selectedEdgeDragRef.current = null;
+    selection.clearCanvas();
+  }, [selection.clearCanvas]);
 
-      if (matchesShortcut(event, "add-node")) {
-        event.preventDefault();
-        if (selectedId) {
-          openNodePaletteForAppend(selectedId);
-          return;
-        }
-        openNodePaletteAtScreenPoint({
-          x: window.innerWidth / 2,
-          y: window.innerHeight / 2,
-        });
-        return;
-      }
-
-      if (matchesShortcut(event, "save-workflow")) {
-        event.preventDefault();
-        void saveNow();
-        return;
-      }
-
-      if (matchesShortcut(event, "run-preview")) {
-        event.preventDefault();
-        const store = useCanvasStore.getState();
-        if (!store.testing && !store.publishing && store.status !== "saving") {
-          void workflowCommands.testRun();
-        }
-        return;
-      }
-
-      if (matchesShortcut(event, "fit-view")) {
-        event.preventDefault();
-        void rf.current?.fitView({ duration: 200, padding: 0.32, maxZoom: 1 });
-        return;
-      }
-
-      if (matchesShortcut(event, "redo")) {
-        event.preventDefault();
-        redoGraph();
-        return;
-      }
-
-      if (matchesShortcut(event, "undo")) {
-        event.preventDefault();
-        undoGraph();
-        return;
-      }
-
-      if (selectedEdgeId && matchesShortcut(event, "delete-node")) {
-        event.preventDefault();
-        deleteEdge(selectedEdgeId);
-        return;
-      }
-
-      if (selectedNodeIds.length > 0 && matchesShortcut(event, "delete-node")) {
-        event.preventDefault();
-        deleteSelectedNodes();
-        return;
-      }
-
-      if (selectedNodeIds.length > 1 && matchesShortcut(event, "duplicate-node")) {
-        event.preventDefault();
-        duplicateSelectedNodes();
-        return;
-      }
-
-      if (selectedNodeIds.length > 1 && matchesShortcut(event, "nudge-node-fast")) {
-        event.preventDefault();
-        nudgeSelectedNodes(event.key, 24);
-        return;
-      }
-
-      if (selectedNodeIds.length > 1 && matchesShortcut(event, "nudge-node")) {
-        event.preventDefault();
-        nudgeSelectedNodes(event.key, 8);
-        return;
-      }
-
-      if (!selectedId) return;
-
-      if (matchesShortcut(event, "inspect-node")) {
-        event.preventDefault();
-        openNodeInspector(selectedId);
-        return;
-      }
-
-      if (matchesShortcut(event, "delete-node")) {
-        event.preventDefault();
-        deleteNode(selectedId);
-        return;
-      }
-
-      if (matchesShortcut(event, "duplicate-node")) {
-        event.preventDefault();
-        duplicateNode(selectedId);
-        return;
-      }
-
-      if (matchesShortcut(event, "nudge-node-fast")) {
-        event.preventDefault();
-        nudgeNode(selectedId, event.key, 24);
-        return;
-      }
-
-      if (matchesShortcut(event, "nudge-node")) {
-        event.preventDefault();
-        nudgeNode(selectedId, event.key, 8);
-      }
+  const addNodeFromKeyboard = useCallback(() => {
+    if (selectedId) {
+      openNodePaletteForAppend(selectedId);
+      return;
     }
+    openNodePaletteAtScreenPoint({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+  }, [selectedId, openNodePaletteForAppend, openNodePaletteAtScreenPoint]);
 
-    window.addEventListener("keydown", onCanvasKeyDown);
-    return () => window.removeEventListener("keydown", onCanvasKeyDown);
-  }, [
+  const runPreviewFromKeyboard = useCallback(() => {
+    const store = useCanvasStore.getState();
+    if (!store.testing && !store.publishing && store.status !== "saving") {
+      return workflowCommands.testRun();
+    }
+  }, [workflowCommands]);
+
+  const fitViewFromKeyboard = useCallback(() => {
+    void rf.current?.fitView({ duration: 200, padding: 0.32, maxZoom: 1 });
+  }, []);
+
+  useCanvasKeyboardController({
     active,
-    selectedId,
-    selectedNodeIds,
-    selectedEdgeId,
-    deleteNode,
-    deleteEdge,
-    duplicateNode,
-    deleteSelectedNodes,
-    duplicateSelectedNodes,
-    openNodeInspector,
-    openNodePaletteAtScreenPoint,
-    openNodePaletteForAppend,
-    undoGraph,
-    redoGraph,
-    nudgeNode,
-    nudgeSelectedNodes,
-    nodes,
-    edges,
-    workflowTitle,
-    groups,
-    saveNow,
-    workflowCommands,
     renameOpen,
     paletteOpen,
-    menu,
-    inspectingId,
-    selection.closeInspector,
-    selection.clearCanvas,
-  ]);
+    menuOpen: Boolean(menu),
+    inspectingNodeId: inspectingId,
+    selectedNodeId: selectedId,
+    selectedNodeIds,
+    selectedEdgeId,
+    onCloseRename: closeRenameFromKeyboard,
+    onClosePalette: closePaletteFromKeyboard,
+    onCloseMenu: closeMenuFromKeyboard,
+    onCloseInspector: selection.closeInspector,
+    onClearSelection: clearSelectionFromKeyboard,
+    onAddNode: addNodeFromKeyboard,
+    onSave: saveNow,
+    onRunPreview: runPreviewFromKeyboard,
+    onFitView: fitViewFromKeyboard,
+    onUndo: undoGraph,
+    onRedo: redoGraph,
+    onDeleteEdge: deleteEdge,
+    onDeleteSelectedNodes: deleteSelectedNodes,
+    onDuplicateSelectedNodes: duplicateSelectedNodes,
+    onNudgeSelectedNodes: nudgeSelectedNodes,
+    onInspectNode: openNodeInspector,
+    onDeleteNode: deleteNode,
+    onDuplicateNode: duplicateNode,
+    onNudgeNode: nudgeNode,
+  });
 
   const updateNodeData = useCallback(
     (id: string, patch: Partial<FluxNodeData>) => {

@@ -7,6 +7,10 @@ const dialog = readFileSync(resolve(root, "src/components/KeyboardShortcutsDialo
 const titleBar = readFileSync(resolve(root, "src/components/TitleBar.tsx"), "utf8");
 const workbench = readFileSync(resolve(root, "src/features/workbench/WorkbenchView.tsx"), "utf8");
 const canvas = readFileSync(resolve(root, "src/features/canvas/CanvasView.tsx"), "utf8");
+const canvasKeyboard = readFileSync(
+  resolve(root, "src/features/canvas/keyboard/useCanvasKeyboardController.ts"),
+  "utf8",
+);
 
 const requirements = [
   [
@@ -46,13 +50,13 @@ const requirements = [
   ],
   [
     "canvas supports save, run, fit-view, and two-speed keyboard node movement",
-    /matchesShortcut\(event, "save-workflow"\)[\s\S]*save\(graphSignature[\s\S]*matchesShortcut\(event, "run-preview"\)[\s\S]*workflowCommands\.testRun\(\)[\s\S]*matchesShortcut\(event, "fit-view"\)[\s\S]*fitView[\s\S]*matchesShortcut\(event, "nudge-node-fast"\)[\s\S]*nudgeNode\(selectedId, event\.key, 24\)[\s\S]*matchesShortcut\(event, "nudge-node"\)[\s\S]*nudgeNode\(selectedId, event\.key, 8\)/,
-    canvas,
+    /matchesShortcut\(event, "save-workflow"\)[\s\S]*onSave\(\)[\s\S]*matchesShortcut\(event, "run-preview"\)[\s\S]*onRunPreview\(\)[\s\S]*matchesShortcut\(event, "fit-view"\)[\s\S]*onFitView\(\)[\s\S]*matchesShortcut\(event, "nudge-node-fast"\)[\s\S]*onNudgeNode\(selectedNodeId, event\.key, 24\)[\s\S]*matchesShortcut\(event, "nudge-node"\)[\s\S]*onNudgeNode\(selectedNodeId, event\.key, 8\)/,
+    canvasKeyboard,
   ],
   [
     "canvas Escape closes only the topmost surface before clearing selection",
-    /matchesShortcut\(event, "close-layer"\)[\s\S]*if \(renameOpen\)[\s\S]*return;[\s\S]*if \(paletteOpen\)[\s\S]*return;[\s\S]*if \(menu\)[\s\S]*return;[\s\S]*if \(inspectingId\)[\s\S]*return;[\s\S]*setSelectedId\(null\)/,
-    canvas,
+    /matchesShortcut\(event, "close-layer"\)[\s\S]*if \(renameOpen\)[\s\S]*return;[\s\S]*if \(paletteOpen\)[\s\S]*return;[\s\S]*if \(menuOpen\)[\s\S]*return;[\s\S]*if \(inspectingNodeId\)[\s\S]*return;[\s\S]*onClearSelection\(\)/,
+    canvasKeyboard,
   ],
 ];
 

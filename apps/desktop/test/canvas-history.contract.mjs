@@ -14,6 +14,10 @@ const historyController = readFileSync(
   resolve(root, "src/features/canvas/history/useCanvasHistoryController.ts"),
   "utf8",
 );
+const keyboardController = readFileSync(
+  resolve(root, "src/features/canvas/keyboard/useCanvasKeyboardController.ts"),
+  "utf8",
+);
 
 const requirements = [
   [
@@ -57,8 +61,8 @@ const requirements = [
   ],
   [
     "keyboard shortcuts support undo and redo before selected-node shortcuts",
-    /matchesShortcut\(event, "redo"\)[\s\S]*redoGraph\(\)[\s\S]*matchesShortcut\(event, "undo"\)[\s\S]*undoGraph\(\)[\s\S]*if \(!selectedId\) return;/,
-    canvasView,
+    /matchesShortcut\(event, "redo"\)[\s\S]*onRedo\(\)[\s\S]*matchesShortcut\(event, "undo"\)[\s\S]*onUndo\(\)[\s\S]*if \(!selectedNodeId\) return;/,
+    keyboardController,
   ],
   [
     "the pure history model has no framework import",
