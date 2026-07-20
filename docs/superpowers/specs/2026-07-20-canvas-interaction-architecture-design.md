@@ -1,7 +1,7 @@
 # Flux 画布交互架构收敛设计
 
 - 日期：2026-07-20
-- 状态：已设计，待实施
+- 状态：实施中（阶段 0 行为安全网与阶段 1 选择控制器已完成）
 - 上位设计：`2026-07-18-architecture-convergence-design.md`
 - 范围：桌面端画布的选择、历史、快捷键、执行与组合边界
 
@@ -328,3 +328,53 @@ type CanvasHistory<T> = {
 4. API 端口和适配器目录治理。
 
 这个顺序优先消除最容易造成用户直接感知回归的编辑器风险，再处理外围模块。
+
+## 16. 阶段 0–1 实施证据
+
+完成日期：2026-07-20。
+
+已落地内容：
+
+- 新增真实左键拖拽框选 E2E，覆盖选择矩形、两个节点提交、多选工具条和空白清除。
+- 新增无 React、无 React Flow 依赖的纯选择 reducer。
+- 新增画布选择控制器，统一节点、批量节点、分组、连线、检查器和 React Flow 选择事件。
+- `CanvasView` 已删除 `setSelectedId`、`setSelectedNodeIds`、`setSelectedGroupId`、`setSelectedEdgeId` 和 `setInspectingId` 五类分散 setter。
+- 框选、连线选择和端点重连的产品行为保持不变。
+
+自动验证：
+
+```text
+pnpm --filter @flux/desktop typecheck
+  PASS
+
+pnpm --filter @flux/desktop test:unit
+  28 passed, 0 failed
+
+node test/architecture-boundaries.contract.mjs
+  PASS
+
+node apps/desktop/test/canvas-multi-select-group.contract.mjs
+  PASS
+
+pnpm exec playwright test -c e2e/playwright.config.ts \
+  e2e/canvas-box-selection.spec.ts \
+  e2e/edge-selection-mode.spec.ts \
+  e2e/view-switch-continuity.spec.ts
+  9 passed, 0 failed
+
+pnpm exec playwright test -c e2e/playwright.config.ts \
+  e2e/canvas-box-selection.spec.ts --workers=1
+  1 passed, 0 failed
+```
+
+Tauri 完整刷新验证：
+
+1. 对长期运行的 `Flux 无界工作流` WebView 执行 `Ctrl+R`。
+2. 从刷新后的工作台重新打开“客户线索处理”。
+3. 在空白画布左键拖过前两个节点，拖动期间选择矩形可见。
+4. 释放后两个节点保持蓝色选中状态，并显示“已选 2 个节点”工具条。
+5. 点击空白区域后节点和工具条选择状态清除。
+6. 点击第一条连线后整线及两个端点高亮；按 `Escape` 后高亮清除。
+7. WebView DevTools 控制台没有红色错误；存在 2 条 React Flow 既有用法警告，不属于本阶段新增错误。
+
+本证据只代表阶段 0–1。历史、快捷键和执行控制器仍按后续独立计划实施。
