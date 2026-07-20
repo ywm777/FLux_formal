@@ -426,3 +426,51 @@ Tauri 完整刷新验证：
 7. WebView DevTools 控制台没有红色错误；可见警告为既有 React Flow/ARIA 开发警告。
 
 本证据只代表阶段 2。快捷键与执行控制器仍按后续独立计划实施。
+
+## 18. 阶段 3 实施证据
+
+完成日期：2026-07-20。
+
+已落地内容：
+
+- 新增 `useCanvasKeyboardController`，集中管理画布激活期间唯一的全局 `keydown` 监听器。
+- 快捷键控制器只依赖按键目录、当前浮层/选择标识和语义动作端口，不导入 Zustand、React Flow、Tauri、API 或执行网关。
+- `CanvasView` 不再直接匹配快捷键，只在组合根注入保存、预览运行、适配视图、历史、选择、节点和连线动作。
+- Escape 的关闭优先级保持为重命名、节点面板、菜单、检查器、画布选择；输入框、文本域和可编辑区域继续保护原生编辑行为。
+- 保存与运行的业务门禁仍留在画布组合根，键盘适配层不读取或解释应用状态。
+- 旧源码形状契约已迁移为选择、历史、会话和键盘控制器边界契约；当前 90 个桌面契约全部通过。
+
+自动验证：
+
+```text
+pnpm --filter @flux/desktop typecheck
+  PASS
+
+pnpm --filter @flux/desktop test:unit
+  33 passed, 0 failed
+
+node test/architecture-boundaries.contract.mjs
+  PASS
+
+apps/desktop/test/*.contract.mjs
+  90 passed, 0 failed
+
+pnpm exec playwright test -c e2e/playwright.config.ts \
+  e2e/canvas-keyboard.spec.ts \
+  e2e/canvas-history.spec.ts \
+  e2e/canvas-box-selection.spec.ts \
+  e2e/edge-selection-mode.spec.ts \
+  e2e/view-switch-continuity.spec.ts --workers=1
+  13 passed, 0 failed
+```
+
+Tauri 完整刷新验证：
+
+1. 对长期运行的 `Flux 无界工作流` WebView 执行 `Ctrl+R`，应用完整回到工作台且没有空白窗口。
+2. 重新打开工作流并点击节点标题，按 `Enter` 后“高级设置”抽屉出现；按 `Escape` 后抽屉关闭而节点仍可继续操作。
+3. 选择节点后按 `Shift+ArrowRight`，节点产生快速微移；按 `Ctrl+Z` 后回到原始位置，选择按历史恢复规则清除。
+4. 重新选择节点并按 `Ctrl+D`，画布从 4 个节点增加为 5 个并选中新副本；按 `Delete` 后恢复为 4 个节点。
+5. 聚焦文本常量的多行输入框后发送 `Ctrl+D` 与 `Delete`，输入框保留焦点且画布仍为 4 个节点，没有误复制或误删除节点。
+6. WebView DevTools 控制台没有红色错误；可见 13 条为既有 ARIA 开发警告，没有本阶段新增异常。
+
+本证据只代表阶段 3。下一阶段将独立提取执行控制器，避免在同一回退边界中混入异步运行生命周期改动。
