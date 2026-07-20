@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:unit": "node --test test/workflow-command-coordinator.test.mts test/workflow-session-service.test.mts test/workbench-service.test.mts test/sharing-service.test.mts test/canvas-selection.test.mts",
+    "test:unit": "node --test test/workflow-command-coordinator.test.mts test/workflow-session-service.test.mts test/workbench-service.test.mts test/sharing-service.test.mts test/canvas-selection.test.mts test/canvas-history.test.mts",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
