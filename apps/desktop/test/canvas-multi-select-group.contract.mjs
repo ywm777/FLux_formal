@@ -46,7 +46,7 @@ const requirements = [
   ],
   [
     "dragging selected nodes records one history boundary",
-    /onNodeDragStart[\s\S]*recordHistory\(\)[\s\S]*nodeDragHistoryRef\.current = true[\s\S]*onNodeDragStop[\s\S]*nodeDragHistoryRef\.current = false/,
+    /onNodeDragStart=\{history\.beginTransaction\}[\s\S]*onNodeDragStop=\{history\.endTransaction\}/,
     canvas,
   ],
   [
