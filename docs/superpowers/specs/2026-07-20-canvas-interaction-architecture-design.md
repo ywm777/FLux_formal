@@ -1,7 +1,7 @@
 # Flux 画布交互架构收敛设计
 
 - 日期：2026-07-20
-- 状态：实施中（阶段 0 行为安全网与阶段 1 选择控制器已完成）
+- 状态：实施中（阶段 0 行为安全网、阶段 1 选择控制器与阶段 2 历史控制器已完成）
 - 上位设计：`2026-07-18-architecture-convergence-design.md`
 - 范围：桌面端画布的选择、历史、快捷键、执行与组合边界
 
@@ -377,4 +377,52 @@ Tauri 完整刷新验证：
 6. 点击第一条连线后整线及两个端点高亮；按 `Escape` 后高亮清除。
 7. WebView DevTools 控制台没有红色错误；存在 2 条 React Flow 既有用法警告，不属于本阶段新增错误。
 
-本证据只代表阶段 0–1。历史、快捷键和执行控制器仍按后续独立计划实施。
+本证据只代表阶段 0–1；阶段 2 证据见下节，快捷键和执行控制器仍按后续独立计划实施。
+
+## 17. 阶段 2 实施证据
+
+完成日期：2026-07-20。
+
+已落地内容：
+
+- 新增泛型、有限深度的 `{ past, present, future, limit }` 纯历史模型。
+- 新编辑会清空重做路径，历史深度默认限制为 80。
+- `CanvasView` 已删除 `undoStackRef`、`redoStackRef` 和 `nodeDragHistoryRef`。
+- 历史快照只包含节点、连线和分组；选择、检查器、节点运行状态与运行时 action 不进入快照。
+- 节点拖拽和分组拖拽改为事务，在手势结束时只提交最终位置。
+- 撤销/重做通过历史控制器返回快照，画布只负责恢复受控图状态。
+
+自动验证：
+
+```text
+pnpm --filter @flux/desktop typecheck
+  PASS
+
+pnpm --filter @flux/desktop test:unit
+  33 passed, 0 failed
+
+node test/architecture-boundaries.contract.mjs
+  PASS
+
+node apps/desktop/test/canvas-history.contract.mjs
+  PASS
+
+pnpm exec playwright test -c e2e/playwright.config.ts \
+  e2e/canvas-history.spec.ts \
+  e2e/canvas-box-selection.spec.ts \
+  e2e/edge-selection-mode.spec.ts \
+  e2e/view-switch-continuity.spec.ts --workers=1
+  11 passed, 0 failed
+```
+
+Tauri 完整刷新验证：
+
+1. 对长期运行的 WebView 执行 `Ctrl+R`，从工作台重新打开“客户线索处理”。
+2. 选择“接收官网线索”并按 `Ctrl+D`，出现“接收官网线索 副本”。
+3. 按 `Ctrl+Z` 后副本消失；按 `Ctrl+Shift+Z` 后副本恢复。
+4. 将原节点从左上区域拖到画布下方，连线随最终位置更新。
+5. 按 `Ctrl+Z` 后节点回到原始位置；按 `Ctrl+Shift+Z` 后节点回到最终拖拽位置，而不是中间帧。
+6. 历史恢复后选择状态按设计清除，工作流其他节点与连线保持完整。
+7. WebView DevTools 控制台没有红色错误；可见警告为既有 React Flow/ARIA 开发警告。
+
+本证据只代表阶段 2。快捷键与执行控制器仍按后续独立计划实施。
