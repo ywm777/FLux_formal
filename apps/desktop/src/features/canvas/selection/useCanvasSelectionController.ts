@@ -64,6 +64,9 @@ export function useCanvasSelectionController({
   const selectGroup = useCallback((groupId: string, nodeIds: string[]) => {
     dispatch({ type: "select-group", groupId, nodeIds });
   }, []);
+  const replaceNodes = useCallback((nodeIds: string[]) => {
+    dispatch({ type: "replace-nodes", nodeIds });
+  }, []);
   const selectEdge = useCallback(
     (
       edgeId: string | null,
@@ -105,6 +108,7 @@ export function useCanvasSelectionController({
     state,
     syncFlowSelection,
     selectNode,
+    replaceNodes,
     selectGroup,
     selectEdge,
     clearCanvas,

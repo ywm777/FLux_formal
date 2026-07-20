@@ -23,6 +23,7 @@ export type CanvasSelectionAction =
       mode: "replace" | "preserve";
       inspector: InspectorMode;
     }
+  | { type: "replace-nodes"; nodeIds: string[] }
   | { type: "prepare-node-toggle" }
   | { type: "select-group"; groupId: string; nodeIds: string[] }
   | {
@@ -114,6 +115,16 @@ export function canvasSelectionReducer(
           action.inspector,
           action.nodeId,
         ),
+      };
+    }
+    case "replace-nodes": {
+      const nodeIds = uniqueIds(action.nodeIds);
+      return {
+        nodeIds,
+        primaryNodeId: nodeIds.length === 1 ? nodeIds[0] : null,
+        groupId: null,
+        edgeId: null,
+        inspectingNodeId: null,
       };
     }
     case "prepare-node-toggle":

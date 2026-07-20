@@ -94,6 +94,23 @@ test("modified node click leaves React Flow in charge of the node set", () => {
   assert.equal(prepared.inspectingNodeId, null);
 });
 
+test("replacing nodes selects an explicit batch without retaining a group", () => {
+  const grouped = canvasSelectionReducer(createEmptyCanvasSelection(), {
+    type: "select-group",
+    groupId: "group-1",
+    nodeIds: ["a", "b"],
+  });
+  const replaced = canvasSelectionReducer(
+    { ...grouped, edgeId: "edge-1", inspectingNodeId: "a" },
+    { type: "replace-nodes", nodeIds: ["copy-a", "copy-b", "copy-a"] },
+  );
+  assert.deepEqual(replaced.nodeIds, ["copy-a", "copy-b"]);
+  assert.equal(replaced.primaryNodeId, null);
+  assert.equal(replaced.groupId, null);
+  assert.equal(replaced.edgeId, null);
+  assert.equal(replaced.inspectingNodeId, null);
+});
+
 test("removing nodes also removes stale primary and inspector targets", () => {
   const selected = canvasSelectionReducer(createEmptyCanvasSelection(), {
     type: "select-node",
