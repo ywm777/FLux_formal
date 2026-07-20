@@ -86,6 +86,7 @@ import {
   validateCanvasConnection,
 } from "./connection/policy.js";
 import { useCanvasConnectionController } from "./connection/useCanvasConnectionController.js";
+import { useCanvasSelectionController } from "./selection/useCanvasSelectionController.js";
 import {
   createFluxNode,
   fromWorkflowGraph,
@@ -365,12 +366,15 @@ export function CanvasView({ active = true }: { active?: boolean }) {
   );
   const [edges, setEdges] = useEdgesState<Edge>([]);
   const [groups, setGroups] = useState<CanvasGroup[]>([]);
+  const selection = useCanvasSelectionController({ groups });
+  const {
+    nodeIds: selectedNodeIds,
+    primaryNodeId: selectedId,
+    groupId: selectedGroupId,
+    edgeId: selectedEdgeId,
+    inspectingNodeId: inspectingId,
+  } = selection.state;
   const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [inspectingId, setInspectingId] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteAnchor, setPaletteAnchor] = useState<{ x: number; y: number } | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -465,11 +469,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     setEdges([]);
     setGroups([]);
     if (templateGraph) setEdges(templateGraph.edges);
-    setSelectedId(null);
-    setSelectedNodeIds([]);
-    setSelectedGroupId(null);
-    setSelectedEdgeId(null);
-    setInspectingId(null);
+    selection.reset();
     setPaletteOpen(false);
     setPaletteAnchor(null);
     setTestRunDetail(null);
@@ -484,7 +484,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     undoStackRef.current = [];
     redoStackRef.current = [];
     scheduleFitView();
-  }, [setNodes, setEdges, scheduleFitView]);
+  }, [setNodes, setEdges, scheduleFitView, selection.reset]);
 
   const applyWorkflowRecordToCanvas = useCallback(
     (record: WorkflowRecord, preserveDirtyTitle = false) => {
@@ -507,11 +507,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       runtimeInputDraftsRef.current = {};
       setRuntimeInputRevision((revision) => revision + 1);
       setRuntimeInputError(null);
-      setSelectedId(null);
-      setSelectedNodeIds([]);
-      setSelectedGroupId(null);
-      setSelectedEdgeId(null);
-      setInspectingId(null);
+      selection.reset();
       setPaletteOpen(false);
       setPaletteAnchor(null);
       setMenu(null);
@@ -530,7 +526,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       scheduleFitView();
       return loadedSignature;
     },
-    [applyRecord, setNodes, setEdges, scheduleFitView],
+    [applyRecord, setNodes, setEdges, scheduleFitView, selection.reset],
   );
 
   const signature = useMemo(
@@ -585,16 +581,16 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       setNodes(snapshot.nodes);
       setEdges(snapshot.edges);
       setGroups(snapshot.groups);
-      setSelectedId(snapshot.selectedId);
-      setSelectedNodeIds(snapshot.selectedNodeIds);
-      setSelectedGroupId(snapshot.selectedGroupId);
-      setSelectedEdgeId(null);
-      setInspectingId(null);
+      selection.restoreGraphSelection({
+        nodeIds: snapshot.selectedNodeIds,
+        primaryNodeId: snapshot.selectedId,
+        groupId: snapshot.selectedGroupId,
+      });
       setPaletteOpen(false);
       setPaletteAnchor(null);
       setMenu(null);
     },
-    [setNodes, setEdges],
+    [setNodes, setEdges, selection.restoreGraphSelection],
   );
 
   const undoGraph = useCallback(function undoGraph() {
@@ -670,40 +666,25 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     [recordHistory, clearStaleRunState, setNodes],
   );
 
-  const onCanvasSelectionChange = useCallback((selection: {
+  const onCanvasSelectionChange = useCallback((flowSelection: {
     nodes: Node<FluxNodeData>[];
     edges: Edge[];
   }) => {
     const lockedEdgeId = selectedEdgeDragRef.current?.id ?? null;
-    const nodeIds = selection.nodes.map((node) => node.id);
-    if (lockedEdgeId && nodeIds.length > 0) {
-      setSelectedNodeIds([]);
-      setSelectedId(null);
-      setSelectedGroupId(null);
-      setSelectedEdgeId(lockedEdgeId);
-      return;
+    const selectedEdge =
+      flowSelection.edges.length === 1 ? flowSelection.edges[0] : null;
+    if (selectedEdge) {
+      selectedEdgeDragRef.current = selectedEdge;
     }
-    setSelectedNodeIds(nodeIds);
-    setSelectedId(nodeIds.length === 1 ? nodeIds[0] : null);
-    if (nodeIds.length > 0) {
+    if (flowSelection.nodes.length > 0 && !lockedEdgeId) {
       selectedEdgeDragRef.current = null;
-      setSelectedEdgeId(null);
-      setSelectedGroupId((current) => {
-        if (!current) return null;
-        const group = groups.find((candidate) => candidate.id === current);
-        return group && group.nodeIds.every((nodeId) => nodeIds.includes(nodeId))
-          ? current
-          : null;
-      });
-      return;
     }
-    setSelectedGroupId(null);
-    const selectedEdge = selection.edges.length === 1 ? selection.edges[0] : null;
-    if (selectedEdge) selectedEdgeDragRef.current = selectedEdge;
-    setSelectedEdgeId(
-      selectedEdge?.id ?? lockedEdgeId,
-    );
-  }, [groups]);
+    selection.syncFlowSelection({
+      nodeIds: flowSelection.nodes.map((node) => node.id),
+      edgeId: selectedEdge?.id ?? null,
+      lockedEdgeId,
+    });
+  }, [selection.syncFlowSelection]);
 
   const onCanvasEdgesChange = useCallback(
     (changes: EdgeChange<Edge>[]) => {
@@ -711,25 +692,28 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       if (changes.some(isGraphChangingEdgeChange)) clearStaleRunState();
       const selectedChange = changes.find((change) => change.type === "select" && change.selected);
       if (selectedChange?.type === "select" && selectedChange.selected) {
-        setSelectedEdgeId(selectedChange.id);
-        setSelectedId(null);
-        setSelectedNodeIds([]);
-        setSelectedGroupId(null);
+        selection.selectEdge(selectedChange.id, "preserve");
       } else {
         const lockedEdgeId = selectedEdgeDragRef.current?.id ?? null;
-        const deselectedIds = new Set(
-          changes.flatMap((change) =>
-            change.type === "select" && !change.selected ? [change.id] : [],
-          ),
-        );
-        setSelectedEdgeId((current) => {
-          if (lockedEdgeId) return lockedEdgeId;
-          return current && deselectedIds.has(current) ? null : current;
-        });
+        if (lockedEdgeId) {
+          selection.selectEdge(lockedEdgeId, "preserve");
+        } else {
+          for (const change of changes) {
+            if (change.type === "select" && !change.selected) {
+              selection.removeEdge(change.id);
+            }
+          }
+        }
       }
       setEdges((current) => applyEdgeChanges(changes, current));
     },
-    [recordHistory, clearStaleRunState, setEdges],
+    [
+      recordHistory,
+      clearStaleRunState,
+      setEdges,
+      selection.selectEdge,
+      selection.removeEdge,
+    ],
   );
 
   const applyNodeRunState = useCallback(function applyNodeRunState(
@@ -860,23 +844,26 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     clearStaleRunState();
     setEdges(result.edges);
     selectedEdgeDragRef.current = result.edges.find((edge) => edge.id === edgeId) ?? null;
-    setSelectedEdgeId(edgeId);
-  }, [nodes, edges, recordHistory, clearStaleRunState, setEdges]);
+    selection.selectEdge(edgeId);
+  }, [
+    nodes,
+    edges,
+    recordHistory,
+    clearStaleRunState,
+    setEdges,
+    selection.selectEdge,
+  ]);
 
   const selectConnectionEdge = useCallback((edgeId: string | null) => {
     selectedEdgeDragRef.current = edgeId
       ? edges.find((edge) => edge.id === edgeId) ?? null
       : null;
     suppressNodeSelectionUntilRef.current = edgeId ? Date.now() + 1_000 : 0;
-    setSelectedId(null);
-    setSelectedNodeIds([]);
-    setSelectedGroupId(null);
-    setSelectedEdgeId(edgeId);
-    setInspectingId(null);
+    selection.selectEdge(edgeId);
     setPaletteOpen(false);
     setPaletteAnchor(null);
     setMenu(null);
-  }, [edges]);
+  }, [edges, selection.selectEdge]);
 
   const screenToFlowPosition = useCallback((point: { x: number; y: number }) =>
     rf.current?.screenToFlowPosition(point) ?? null, []);
@@ -927,14 +914,17 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       if (insertedEdge) {
         setEdges((es) => [...es, insertedEdge]);
       }
-      setSelectedId(node.id);
-      setSelectedNodeIds([node.id]);
-      setSelectedGroupId(null);
-      setSelectedEdgeId(null);
-      setInspectingId(null);
+      selection.selectNode(node.id);
       insertSourceId.current = null;
     },
-    [nodes, recordHistory, clearStaleRunState, setNodes, setEdges],
+    [
+      nodes,
+      recordHistory,
+      clearStaleRunState,
+      setNodes,
+      setEdges,
+      selection.selectNode,
+    ],
   );
 
   const openNodePaletteAtScreenPoint = useCallback(function openNodePaletteAtScreenPoint(
@@ -944,14 +934,10 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     insertPos.current = pos ?? { x: 160, y: 160 };
     insertSourceId.current = null;
     setPaletteAnchor({ x: point.x, y: point.y });
-    setSelectedId(null);
-    setSelectedNodeIds([]);
-    setSelectedGroupId(null);
-    setSelectedEdgeId(null);
-    setInspectingId(null);
+    selection.clearCanvas();
     setMenu(null);
     setPaletteOpen(true);
-  }, []);
+  }, [selection.clearCanvas]);
 
   const openNodePaletteForAppend = useCallback(function openNodePaletteForAppend(
     sourceId: string,
@@ -966,14 +952,10 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     };
     insertPos.current = pos;
     setPaletteAnchor(anchor);
-    setSelectedId(sourceId);
-    setSelectedNodeIds([sourceId]);
-    setSelectedGroupId(null);
-    setSelectedEdgeId(null);
-    setInspectingId(null);
+    selection.selectNode(sourceId);
     setMenu(null);
     setPaletteOpen(true);
-  }, [nodes]);
+  }, [nodes, selection.selectNode]);
 
   const onPaneDoubleClick = useCallback((event: MouseEvent) => {
     if (shouldIgnoreCanvasDoubleClick(event.target)) return;
@@ -992,12 +974,15 @@ export function CanvasView({ active = true }: { active?: boolean }) {
           nodeIds: group.nodeIds.filter((nodeId) => nodeId !== id),
         }))
         .filter((group) => group.nodeIds.length >= 2));
-      setSelectedId((cur) => (cur === id ? null : cur));
-      setSelectedNodeIds((current) => current.filter((nodeId) => nodeId !== id));
-      setSelectedGroupId(null);
-      setInspectingId((cur) => (cur === id ? null : cur));
+      selection.removeNodes([id]);
     },
-    [recordHistory, clearStaleRunState, setNodes, setEdges],
+    [
+      recordHistory,
+      clearStaleRunState,
+      setNodes,
+      setEdges,
+      selection.removeNodes,
+    ],
   );
 
   const deleteEdge = useCallback(
@@ -1006,25 +991,21 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       recordHistory();
       clearStaleRunState();
       setEdges((current) => current.filter((edge) => edge.id !== id));
-      setSelectedEdgeId((current) => current === id ? null : current);
+      selection.removeEdge(id);
       if (selectedEdgeDragRef.current?.id === id) {
         selectedEdgeDragRef.current = null;
       }
       setMenu(null);
     },
-    [edges, recordHistory, clearStaleRunState, setEdges],
+    [edges, recordHistory, clearStaleRunState, setEdges, selection.removeEdge],
   );
 
   const openNodeInspector = useCallback((id: string) => {
-    setSelectedId(id);
-    setSelectedNodeIds([id]);
-    setSelectedGroupId(null);
-    setSelectedEdgeId(null);
-    setInspectingId(id);
+    selection.selectNode(id, { inspector: "open" });
     setMenu(null);
     setPaletteOpen(false);
     setPaletteAnchor(null);
-  }, []);
+  }, [selection.selectNode]);
 
   const duplicateNode = useCallback(
     (id: string) => {
@@ -1054,14 +1035,10 @@ export function CanvasView({ active = true }: { active?: boolean }) {
         ...ns.map((node) => ({ ...node, selected: false })),
         duplicate,
       ]);
-      setSelectedId(copyId);
-      setSelectedNodeIds([copyId]);
-      setSelectedGroupId(null);
-      setSelectedEdgeId(null);
-      setInspectingId(null);
+      selection.selectNode(copyId);
       setMenu(null);
     },
-    [nodes, recordHistory, clearStaleRunState, setNodes],
+    [nodes, recordHistory, clearStaleRunState, setNodes, selection.selectNode],
   );
 
   const deleteSelectedNodes = useCallback(() => {
@@ -1079,11 +1056,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
         nodeIds: group.nodeIds.filter((nodeId) => !ids.has(nodeId)),
       }))
       .filter((group) => group.nodeIds.length >= 2));
-    setSelectedNodeIds([]);
-    setSelectedId(null);
-    setSelectedGroupId(null);
-    setSelectedEdgeId(null);
-    setInspectingId(null);
+    selection.removeNodes([...ids]);
     setMenu(null);
   }, [
     selectedNodeIds,
@@ -1091,6 +1064,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     clearStaleRunState,
     setNodes,
     setEdges,
+    selection.removeNodes,
   ]);
 
   const duplicateSelectedNodes = useCallback(() => {
@@ -1132,11 +1106,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       ...duplicates,
     ]);
     setEdges((current) => [...current, ...duplicateEdges]);
-    setSelectedNodeIds(duplicateIds);
-    setSelectedId(duplicateIds.length === 1 ? duplicateIds[0] : null);
-    setSelectedGroupId(null);
-    setSelectedEdgeId(null);
-    setInspectingId(null);
+    selection.replaceNodes(duplicateIds);
   }, [
     nodes,
     edges,
@@ -1145,6 +1115,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     clearStaleRunState,
     setNodes,
     setEdges,
+    selection.replaceNodes,
   ]);
 
   const mergeSelectedNodes = useCallback(() => {
@@ -1165,32 +1136,25 @@ export function CanvasView({ active = true }: { active?: boolean }) {
         .filter((group) => group.nodeIds.length >= 2),
       { id, label, nodeIds },
     ]);
-    setSelectedId(null);
-    setSelectedGroupId(id);
-    setSelectedEdgeId(null);
-    setInspectingId(null);
-  }, [nodes, selectedNodeIds, recordHistory]);
+    selection.selectGroup(id, nodeIds);
+  }, [nodes, selectedNodeIds, recordHistory, selection.selectGroup]);
 
   const selectGroup = useCallback((group: CanvasGroup) => {
     const nodeIds = group.nodeIds.filter((nodeId) =>
       nodes.some((node) => node.id === nodeId),
     );
-    setSelectedNodeIds(nodeIds);
-    setSelectedId(nodeIds.length === 1 ? nodeIds[0] : null);
-    setSelectedGroupId(group.id);
-    setSelectedEdgeId(null);
-    setInspectingId(null);
+    selection.selectGroup(group.id, nodeIds);
     setPaletteOpen(false);
     setPaletteAnchor(null);
     setMenu(null);
-  }, [nodes]);
+  }, [nodes, selection.selectGroup]);
 
   const ungroupNodes = useCallback((groupId: string) => {
     if (!groups.some((group) => group.id === groupId)) return;
     recordHistory();
     setGroups((current) => current.filter((group) => group.id !== groupId));
-    setSelectedGroupId(null);
-  }, [groups, recordHistory]);
+    selection.clearGroup(groupId);
+  }, [groups, recordHistory, selection.clearGroup]);
 
   const beginGroupDrag = useCallback((
     event: React.PointerEvent<HTMLButtonElement>,
@@ -1325,46 +1289,36 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       });
       insertPos.current = pos ?? { x: 160, y: 160 };
       insertSourceId.current = null;
-      setSelectedId(null);
-      setSelectedNodeIds([]);
-      setSelectedGroupId(null);
-      setSelectedEdgeId(null);
-      setInspectingId(null);
+      selection.clearCanvas();
       setPaletteOpen(false);
       setPaletteAnchor(null);
       setMenu({ x: event.clientX, y: event.clientY, kind: "pane" });
     },
-    [],
+    [selection.clearCanvas],
   );
 
   const onNodeContextMenu = useCallback(
     (event: MouseEvent, node: Node<FluxNodeData>) => {
       event.preventDefault();
       const preserveMultiSelection = selectedNodeIds.includes(node.id) && selectedNodeIds.length > 1;
-      setSelectedId(node.id);
-      if (!preserveMultiSelection) {
-        setSelectedNodeIds([node.id]);
-        setSelectedGroupId(null);
-      }
-      setSelectedEdgeId(null);
+      selection.selectNode(node.id, {
+        mode: preserveMultiSelection ? "preserve" : "replace",
+        inspector: "preserve",
+      });
       setMenu({ x: event.clientX, y: event.clientY, kind: "node", nodeId: node.id });
     },
-    [selectedNodeIds],
+    [selectedNodeIds, selection.selectNode],
   );
 
   const onEdgeContextMenu = useCallback(
     (event: MouseEvent, edge: Edge) => {
       event.preventDefault();
-      setSelectedId(null);
-      setSelectedNodeIds([]);
-      setSelectedGroupId(null);
-      setSelectedEdgeId(edge.id);
-      setInspectingId(null);
+      selection.selectEdge(edge.id);
       setPaletteOpen(false);
       setPaletteAnchor(null);
       setMenu({ x: event.clientX, y: event.clientY, kind: "edge", edgeId: edge.id });
     },
-    [],
+    [selection.selectEdge],
   );
 
   const openWorkflowRename = useCallback(() => {
@@ -1547,14 +1501,11 @@ export function CanvasView({ active = true }: { active?: boolean }) {
           return;
         }
         if (inspectingId) {
-          setInspectingId(null);
+          selection.closeInspector();
           return;
         }
-        setSelectedId(null);
-        setSelectedNodeIds([]);
-        setSelectedGroupId(null);
         selectedEdgeDragRef.current = null;
-        setSelectedEdgeId(null);
+        selection.clearCanvas();
         return;
       }
 
@@ -1700,6 +1651,8 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     paletteOpen,
     menu,
     inspectingId,
+    selection.closeInspector,
+    selection.clearCanvas,
   ]);
 
   const updateNodeData = useCallback(
@@ -1831,16 +1784,13 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     );
     if (missingNode) {
       setRuntimeInputError("请完成本次运行所需的输入");
-      setSelectedId(missingNode.id);
-      setSelectedNodeIds([missingNode.id]);
-      setSelectedGroupId(null);
-      setInspectingId(null);
+      selection.selectNode(missingNode.id);
       return;
     }
 
     setRuntimeInputError(null);
     await executeDraftRun(inputs);
-  }, [nodes, edges, executeDraftRun]);
+  }, [nodes, edges, executeDraftRun, selection.selectNode]);
 
   const addNodeFromCommand = useCallback(() => {
     openNodePaletteAtScreenPoint({
@@ -2165,21 +2115,16 @@ export function CanvasView({ active = true }: { active?: boolean }) {
                 endpointDropEdgeId &&
                 Date.now() < suppressNodeSelectionUntilRef.current
               ) {
-                setSelectedId(null);
-                setSelectedNodeIds([]);
-                setSelectedGroupId(null);
-                setSelectedEdgeId(endpointDropEdgeId);
+                selection.selectEdge(endpointDropEdgeId, "preserve");
                 return;
               }
               selectedEdgeDragRef.current = null;
               suppressNodeSelectionUntilRef.current = 0;
               if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
-                setSelectedId(node.id);
-                setSelectedNodeIds([node.id]);
-                setSelectedGroupId(null);
+                selection.selectNode(node.id);
+              } else {
+                selection.prepareNodeToggle();
               }
-              setSelectedEdgeId(null);
-              setInspectingId(null);
               setPaletteOpen(false);
               setPaletteAnchor(null);
               setMenu(null);
@@ -2190,38 +2135,23 @@ export function CanvasView({ active = true }: { active?: boolean }) {
                 endpointDropEdgeId &&
                 Date.now() < suppressNodeSelectionUntilRef.current
               ) {
-                setSelectedId(null);
-                setSelectedNodeIds([]);
-                setSelectedGroupId(null);
-                setSelectedEdgeId(endpointDropEdgeId);
+                selection.selectEdge(endpointDropEdgeId, "preserve");
                 return;
               }
               selectedEdgeDragRef.current = null;
               suppressNodeSelectionUntilRef.current = 0;
-              setSelectedId(node.id);
-              setSelectedNodeIds([node.id]);
-              setSelectedGroupId(null);
-              setSelectedEdgeId(null);
-              setInspectingId(node.id);
+              selection.selectNode(node.id, { inspector: "open" });
             }}
             onEdgeClick={(_, edge) => {
               selectedEdgeDragRef.current = edge;
-              setSelectedId(null);
-              setSelectedNodeIds([]);
-              setSelectedGroupId(null);
-              setSelectedEdgeId(edge.id);
-              setInspectingId(null);
+              selection.selectEdge(edge.id);
               setPaletteOpen(false);
               setPaletteAnchor(null);
               setMenu(null);
             }}
             onPaneClick={() => {
               selectedEdgeDragRef.current = null;
-              setSelectedId(null);
-              setSelectedNodeIds([]);
-              setSelectedGroupId(null);
-              setSelectedEdgeId(null);
-              setInspectingId(null);
+              selection.clearCanvas();
               setMenu(null);
             }}
             onPaneContextMenu={onPaneContextMenu}
@@ -2291,7 +2221,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       {inspectingNode && (
         <NodeInspector
           node={inspectingNode}
-          onClose={() => setInspectingId(null)}
+          onClose={selection.closeInspector}
           onLabelChange={(label) => updateNodeData(inspectingNode.id, { label })}
           onConfigChange={(config: FormValue) =>
             updateNodeData(inspectingNode.id, { config })
