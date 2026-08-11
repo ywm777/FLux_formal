@@ -40,8 +40,11 @@ interface CanvasState {
   setRunProgress: (runProgress: CanvasRunProgress | null) => void;
   /** 开始一个新的未保存草稿；这是状态转换，不是跨组件命令。 */
   startDraft: (title: string) => void;
-  /** 保存/加载成功后同步服务端返回的 id 与 version */
-  applyRecord: (record: Pick<WorkflowRecord, "id" | "version" | "title" | "status">) => void;
+  /** 保存/加载成功后同步服务端返回的 id 与 version。保存期间仍有编辑时保留本地草稿状态。 */
+  applyRecord: (
+    record: Pick<WorkflowRecord, "id" | "version" | "title" | "status">,
+    preserveLocalDraft?: boolean,
+  ) => void;
   reset: () => void;
 }
 
@@ -85,17 +88,17 @@ const createCanvasStore = () => create<CanvasState>((set) => ({
       testing: false,
       runProgress: null,
     }),
-  applyRecord: (record) =>
-    set({
+  applyRecord: (record, preserveLocalDraft = false) =>
+    set((state) => ({
       workflowId: record.id,
       version: record.version,
       workflowStatus: record.status,
-      title: record.title,
-      titleDirty: false,
-      status: "saved",
+      title: preserveLocalDraft ? state.title : record.title,
+      titleDirty: preserveLocalDraft ? state.titleDirty : false,
+      status: preserveLocalDraft ? "idle" : "saved",
       error: null,
       lastSavedAt: new Date().toISOString(),
-    }),
+    })),
   reset: () =>
     set({
       workflowId: null,

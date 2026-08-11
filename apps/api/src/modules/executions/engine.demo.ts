@@ -52,7 +52,10 @@ async function main() {
     ],
   });
 
-  const result = await runWorkflow(graph, registry);
+  const processEvents: string[] = [];
+  const result = await runWorkflow(graph, registry, {
+    onNodeRun: (run) => processEvents.push(`${run.nodeId}:${run.status}`),
+  });
 
   console.log("\n=== 执行结果 ===");
   console.log("状态:", result.status);
@@ -71,7 +74,12 @@ async function main() {
   const ok =
     result.status === "success" &&
     logARun?.status === "success" &&
-    logBRun?.status === "skipped";
+    logBRun?.status === "skipped" &&
+    processEvents.includes("trigger:running") &&
+    processEvents.includes("cond:running") &&
+    processEvents.includes("logA:running") &&
+    !processEvents.includes("logB:running");
+  console.log(`过程状态事件: ${processEvents.join(" -> ")}`);
   console.log(`\n断言（真分支执行、假分支跳过）: ${ok ? "通过 PASS" : "失败 FAIL"}`);
   process.exit(ok ? 0 : 1);
 }

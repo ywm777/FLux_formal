@@ -1,0 +1,101 @@
+openapi: 3.1.0
+info:
+  title: Flux API
+  version: 0.1.0
+  description: Flux 无界工作流 SaaS API
+
+servers:
+  - url: http://localhost:3000/api
+
+paths:
+  /health:
+    get:
+      summary: 健康检查
+
+  /auth/register:
+    post:
+      summary: 邮箱注册
+  /auth/email:
+    post:
+      summary: 邮箱登录
+  /auth/refresh:
+    post:
+      summary: 刷新令牌
+  /auth/me:
+    get:
+      summary: 当前用户
+
+  /workflows:
+    get:
+      summary: 列出我的工作流
+    post:
+      summary: 创建工作流
+  /workflows/published:
+    get:
+      summary: 已发布工作流（任务页）
+  /workflows/{id}:
+    get:
+      summary: 获取工作流
+    patch:
+      summary: 更新草稿（乐观锁 version）
+    delete:
+      summary: 删除工作流
+  /workflows/{id}/publish:
+    post:
+      summary: 发布工作流
+  /workflows/{id}/favorite:
+    post:
+      summary: 收藏/取消收藏
+
+  /executions:
+    get:
+      summary: 执行历史
+    post:
+      summary: 启动执行（异步入队，可通过 inputs[nodeId] 提交本次运行参数）
+  /executions/{id}:
+    get:
+      summary: 执行详情
+  /executions/{id}/logs:
+    get:
+      summary: 执行日志
+  /executions/{id}/cancel:
+    post:
+      summary: 暂停/终止
+
+  /nodes/registry:
+    get:
+      summary: 节点注册表
+  /nodes/custom:
+    post:
+      summary: 上传自定义节点
+
+  /market:
+    get:
+      summary: 公开市场
+  /market/fork/{id}:
+    post:
+      summary: Fork 工作流
+
+  /ai/completions:
+    post:
+      summary: AI 补全（开源优先）
+  /ai/connections:
+    get:
+      summary: 列出当前用户的 AI 连接（不返回 API Key）
+    post:
+      summary: 创建 AI 连接（API Key 加密存储）
+  /ai/connections/{id}:
+    delete:
+      summary: 删除 AI 连接
+  /ai/connections/{id}/test:
+    post:
+      summary: 测试 AI 连接并返回更新后的连接状态
+
+  /apps/authorizations:
+    get:
+      summary: 已授权应用
+    post:
+      summary: 新增授权
+  /apps/authorizations/{id}:
+    delete:
+      summary: 撤销授权

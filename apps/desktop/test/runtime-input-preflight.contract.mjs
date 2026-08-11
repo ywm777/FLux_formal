@@ -10,11 +10,15 @@ const nodeTypes = readRepo("packages/node-sdk/src/types.ts");
 const productivity = readRepo("packages/node-sdk/src/builtin/productivity.ts");
 const executionService = readRepo("apps/api/src/modules/executions/executions.service.ts");
 const runtime = readRepo("packages/workflow-runtime/src/runtime.ts");
-const executionController = readRepo("apps/api/src/modules/executions/executions.controller.ts");
+const executionTransport = readRepo("apps/api/src/modules/executions/executions.controller.ts");
 const api = readDesktop("src/lib/api.ts");
 const canvasView = readDesktop("src/features/canvas/CanvasView.tsx");
 const fluxNode = readDesktop("src/features/canvas/FluxNode.tsx");
 const workbench = readDesktop("src/features/workbench/WorkbenchView.tsx");
+const executionModel = readDesktop("src/features/canvas/execution/canvasExecution.ts");
+const executionController = readDesktop(
+  "src/features/canvas/execution/canvasExecutionController.ts",
+);
 
 const requirements = [
   [
@@ -29,8 +33,8 @@ const requirements = [
   ],
   [
     "execution endpoints accept node-scoped runtime inputs",
-    /body:\s*\{ workflowId: string; inputs\?: ExecutionNodeInputs \}[\s\S]*body\.inputs/,
-    executionController,
+    /@Body\(\) body: StartExecutionDto[\s\S]*body\.workflowId[\s\S]*body\.inputs/,
+    executionTransport,
   ],
   [
     "backend rejects missing required input before creating an execution",
@@ -53,23 +57,23 @@ const requirements = [
   ],
   [
     "top-bar execution validates required input and focuses the invalid node",
-    /const onTestRun = useCallback[\s\S]*missingRuntimeInputFields[\s\S]*setRuntimeInputError\("请完成本次运行所需的输入"\)[\s\S]*selection\.selectNode\(missingNode\.id\)[\s\S]*executeDraftRun\(inputs\)/,
+    /const onTestRun = useCallback[\s\S]*runtimeInputs: runtimeInputDescriptors,[\s\S]*saveWorkflow: saveNow,[\s\S]*getWorkflowId:/,
     canvasView,
   ],
   [
     "canvas keeps non-persistent runtime drafts outside render state",
-    /runtimeInputDraftsRef = useRef<ExecutionNodeInputs>[\s\S]*runtimeInput:\s*runtimeSchema[\s\S]*toFormSchema\(runtimeSchema\)[\s\S]*runtimeInputDraftsRef\.current\[node\.id\][\s\S]*updateRuntimeInput\(node\.id, value\)/,
-    canvasView,
+    /private drafts: ExecutionNodeInputs = \{\}[\s\S]*updateRuntimeInput\(nodeId: string[\s\S]*this\.drafts = \{ \.\.\.this\.drafts, \[nodeId\]: value \}/,
+    executionController,
   ],
   [
     "the unified top-bar action submits current runtime drafts",
-    /const onTestRun = useCallback[\s\S]*inputs\[node\.id\] = runtimeInputDraftsRef\.current\[node\.id\] \?\? defaultsFromSchema\(schema\)[\s\S]*executeDraftRun\(inputs\)/,
+    /const onTestRun = useCallback[\s\S]*await execution\.run\(\{[\s\S]*runtimeInputs: runtimeInputDescriptors/,
     canvasView,
   ],
   [
     "top-level execution reuses the current node draft",
-    /inputs\[node\.id\] = runtimeInputDraftsRef\.current\[node\.id\] \?\? defaultsFromSchema\(schema\)/,
-    canvasView,
+    /prepareCanvasExecutionInputs\([\s\S]*drafts\[descriptor\.nodeId\] \?\? descriptor\.defaults[\s\S]*inputs\[descriptor\.nodeId\] = \{ \.\.\.value \}/,
+    executionModel,
   ],
   [
     "runtime text fields keep native cursor and scroll state while editing",

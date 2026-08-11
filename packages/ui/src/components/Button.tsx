@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, CSSProperties } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type CSSProperties } from "react";
 
 export type ButtonVariant = "primary" | "ghost" | "danger";
 
@@ -27,6 +27,9 @@ const variants: Record<ButtonVariant, CSSProperties> = {
   danger: { background: "var(--danger)", color: "var(--text-inverse)" },
 };
 
-export function Button({ variant = "primary", style, ...rest }: ButtonProps) {
-  return <button style={{ ...base, ...variants[variant], ...style }} {...rest} />;
-}
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = "primary", style, ...rest },
+  ref,
+) {
+  return <button ref={ref} style={{ ...base, ...variants[variant], ...style }} {...rest} />;
+});

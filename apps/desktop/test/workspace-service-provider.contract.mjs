@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const providerPath = resolve(root, "src/app/WorkspaceServiceProvider.tsx");
 const main = readFileSync(resolve(root, "src/main.tsx"), "utf8");
+const repository = readFileSync(
+  resolve(root, "src/lib/workspaceRepository.ts"),
+  "utf8",
+);
 
 let provider = "";
 try {
@@ -16,8 +20,18 @@ try {
 const requirements = [
   [
     "provider exposes only the workspace repository application port",
-    /createContext<WorkspaceRepositoryPort \| null>[\s\S]*export function WorkspaceServiceProvider[\s\S]*value=\{workspaceRepository\}[\s\S]*export function useWorkspaceRepository\(\): WorkspaceRepositoryPort/,
+    /createContext<WorkspaceRepositoryPort \| null>[\s\S]*useWorkspaceStore\([\s\S]*createWorkspaceRepository\(workspaceKind\)[\s\S]*value=\{workspaceRepository\}[\s\S]*export function useWorkspaceRepository\(\): WorkspaceRepositoryPort/,
     provider,
+  ],
+  [
+    "repository captures the workspace kind instead of reading global store state per request",
+    /export function createWorkspaceRepository\(\s*kind: WorkspaceKind,[\s\S]*const local = kind === "local"[\s\S]*local \? localWorkspaceRepository\.list\(\) : cloudWorkflowApi\.list\(\)/,
+    repository,
+  ],
+  [
+    "repository adapter does not import the workspace store",
+    (source) => !/from ["'][^"']*store\/workspaceStore/.test(source),
+    repository,
   ],
   [
     "composition root installs workspace services above the app",
@@ -27,7 +41,9 @@ const requirements = [
 ];
 
 const missing = requirements
-  .filter(([, pattern, source]) => !pattern.test(source))
+  .filter(([, pattern, source]) =>
+    typeof pattern === "function" ? !pattern(source) : !pattern.test(source),
+  )
   .map(([label]) => label);
 
 if (missing.length > 0) {

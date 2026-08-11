@@ -35,6 +35,7 @@ export interface PortSpec {
   id: string;
   name: string;
   dataType?: string;
+  capacity?: "one" | "many";
 }
 
 export interface PortSchema {
@@ -42,11 +43,24 @@ export interface PortSchema {
   outputs: PortSpec[];
 }
 
+/** 系统内部异常通道；画布使用通用连接点，由异常捕获节点的角色自动映射。 */
+export const ERROR_OUTPUT_PORT_ID = "__error__";
+export const ERROR_INPUT_PORT_ID = "error";
+
 /** 载体绑定引用：指向用户授权的应用凭证 / 模型端点 / 数据源等 */
 export interface CarrierBindingRef {
   bindingId: string;
   carrier: CarrierKind;
   label?: string;
+}
+
+/** Stable metadata supplied by the runtime for every external capability call. */
+export interface CapabilityInvocationMetadata {
+  executionId: string;
+  nodeId: string;
+  attempt: number;
+  invocationIndex: number;
+  idempotencyKey: string;
 }
 
 /** 节点执行上下文 */
@@ -68,6 +82,7 @@ export interface NodeContext {
     bindingId: string,
     action: string,
     payload?: unknown,
+    metadata?: CapabilityInvocationMetadata,
   ) => Promise<unknown>;
 }
 
@@ -79,11 +94,19 @@ export interface NodeOutput {
 export interface NodeDefinition {
   id: string; // 全局唯一 type
   name: string;
+  /** 面向用户的一句话能力说明，用于能力搜索与选择 */
+  description?: string;
   category: string;
   icon: string;
   version: string;
   carrier: CarrierKind;
   ports: PortSchema;
+  /** 每次执行时由用户或触发器提供的临时参数，不属于持久化节点配置。 */
+  runtimeInputSchema?: JSONSchema;
+  /** required=始终要求运行时输入；fallback=存在上游连线时运行时输入仅作备用。 */
+  runtimeInputPolicy?: "required" | "fallback";
+  /** 参与执行引擎控制流的特殊角色。 */
+  executionRole?: "error-handler";
   configSchema: JSONSchema;
   execute: (ctx: NodeContext) => Promise<NodeOutput>;
   /** 引用用户授权的载体（应用/模型/数据源…） */

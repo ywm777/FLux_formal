@@ -1,0 +1,3 @@
+[build]
+# Rust 编译产物放在工作区 data/ 下，避免占用 C 盘用户目录
+target-dir = "../../../data/cargo-target"

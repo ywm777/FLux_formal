@@ -26,11 +26,15 @@ import { getExecutionStatusLabel } from "../lib/executionDisplay.js";
 import { AccountSettingsDialog } from "../features/auth/AccountSettingsDialog.js";
 import { useWorkspaceStore, type WorkspaceKind } from "../store/workspaceStore.js";
 import { useWorkflowCommands } from "../app/WorkflowCommandProvider.js";
+import { useCustomNodeStore } from "../features/node-studio/store/customNodeStore.js";
+import { useMcpConnectionStore } from "../features/capabilities/store/mcpConnectionStore.js";
+import { McpSettingsDialog } from "../features/capabilities/McpConnectionDrawer.js";
 
 const BAR_HEIGHT = 40;
 const PRIMARY_NAV: { mode: AppMode; label: string }[] = [
   { mode: "workbench", label: "工作台" },
   { mode: "canvas", label: "画布" },
+  { mode: "nodes", label: "节点库" },
 ];
 
 export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
@@ -39,6 +43,7 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [workflowMenuOpen, setWorkflowMenuOpen] = useState(false);
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -62,6 +67,9 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
   const runProgress = useCanvasStore((s) => s.runProgress);
   const saving = useCanvasStore((s) => s.status === "saving");
   const canvasName = useCanvasStore((s) => s.title);
+  const customNodeDefinitions = useCustomNodeStore((s) => s.activeDefinitions);
+  const mcpNodeDefinitions = useMcpConnectionStore((s) => s.definitions);
+  const mcpConnections = useMcpConnectionStore((s) => s.connections);
   const authed = authStatus === "authenticated";
   const displayName = authed ? user?.displayName ?? "未命名用户" : "本地空间";
   const accountIdentity = authed
@@ -99,6 +107,20 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
         group: "导航",
         keywords: ["workbench"],
         shortcut: shortcutLabel("open-workbench"),
+      },
+      {
+        id: "open-node-studio",
+        label: "打开节点设计器",
+        description: "创建、测试和管理自己的节点",
+        group: "导航",
+        keywords: ["node", "studio", "custom", "节点", "设计"],
+      },
+      {
+        id: "app-settings",
+        label: "设置",
+        description: "管理 MCP 服务和 Flux 基础配置",
+        group: "设置",
+        keywords: ["settings", "mcp", "server", "设置", "服务", "连接"],
       },
       {
         id: "account-settings",
@@ -171,12 +193,16 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
           group: "画布",
           keywords: ["share", "link", "分享", "链接"],
         },
-        ...catalogNodes.map((def): CommandItem => ({
+        ...[
+          ...catalogNodes,
+          ...(workspaceKind === "local" ? customNodeDefinitions : []),
+          ...(workspaceKind === "local" ? mcpNodeDefinitions : []),
+        ].map((def): CommandItem => ({
           id: `node:${def.id}`,
           label: def.name,
           description: getNodeDefinitionSummary(def),
-          group: "能力",
-          keywords: [def.id, def.category, def.carrier],
+          group: def.id.startsWith("custom.") ? "我的节点" : "能力",
+          keywords: [def.id, def.category, def.carrier, def.id.startsWith("custom.") ? "自定义" : ""],
           accent: carrierColorVar[def.carrier as keyof typeof carrierColorVar],
         })),
       );
@@ -189,7 +215,7 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
       if (item.id === "publish" && workspaceKind !== "cloud") return false;
       return true;
     });
-  }, [authed, mode, publishing, saving, sharing, testing, workspaceKind]);
+  }, [authed, customNodeDefinitions, mcpNodeDefinitions, mode, publishing, saving, sharing, testing, workspaceKind]);
 
   function onCommandSelect(item: CommandItem) {
     if (item.id.startsWith("node:")) {
@@ -226,6 +252,12 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
       case "open-workbench":
         setMode("workbench");
         break;
+      case "open-node-studio":
+        setMode("nodes");
+        break;
+      case "app-settings":
+        showSettings();
+        break;
       case "ai-access":
         showAiAccess();
         break;
@@ -239,6 +271,15 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
   }
 
   const closeShortcutHelp = useCallback(() => setShortcutHelpOpen(false), []);
+  const showSettings = useCallback(() => {
+    setAccountMenuOpen(false);
+    setWorkflowMenuOpen(false);
+    setAccountSettingsOpen(false);
+    setCommandOpen(false);
+    setShortcutHelpOpen(false);
+    closeAiAccess();
+    setSettingsOpen(true);
+  }, [closeAiAccess]);
   const showAiAccess = useCallback(() => {
     if (!authed) {
       requestCloudAccess("switch");
@@ -247,6 +288,7 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
     setAccountMenuOpen(false);
     setWorkflowMenuOpen(false);
     setAccountSettingsOpen(false);
+    setSettingsOpen(false);
     setCommandOpen(false);
     setShortcutHelpOpen(false);
     openAiAccess();
@@ -260,6 +302,7 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
     setWorkflowMenuOpen(false);
     setCommandOpen(false);
     setShortcutHelpOpen(false);
+    setSettingsOpen(false);
     closeAiAccess();
     setAccountSettingsOpen(true);
   }, [authed, closeAiAccess, requestCloudAccess]);
@@ -270,6 +313,7 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
   const switchWorkspace = useCallback(async (kind: WorkspaceKind) => {
     setAccountMenuOpen(false);
     setAccountSettingsOpen(false);
+    setSettingsOpen(false);
     setCommandOpen(false);
     closeAiAccess();
     useCanvasStore.getState().reset();
@@ -444,14 +488,19 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
         <nav role="tablist" aria-label="主导航" style={primaryNav}>
           {PRIMARY_NAV.map((item) => {
             const active = mode === item.mode;
+            const shortcut = item.mode === "workbench"
+              ? "open-workbench"
+              : item.mode === "canvas" ? "open-canvas" : null;
             return (
               <button
                 key={item.mode}
                 type="button"
                 role="tab"
                 aria-selected={active}
-                aria-keyshortcuts={item.mode === "workbench" ? "Control+1 Meta+1" : "Control+2 Meta+2"}
-                title={`${item.label} (${shortcutLabel(item.mode === "workbench" ? "open-workbench" : "open-canvas")})`}
+                aria-keyshortcuts={item.mode === "workbench"
+                  ? "Control+1 Meta+1"
+                  : item.mode === "canvas" ? "Control+2 Meta+2" : undefined}
+                title={shortcut ? `${item.label} (${shortcutLabel(shortcut)})` : item.label}
                 onClick={() => setMode(item.mode)}
                 style={primaryNavButton(active)}
               >
@@ -732,6 +781,19 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
                   {workspaceKind === "local" ? "切换到云端空间" : "切换到本地空间"}
                 </button>
 
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-label="设置"
+                  onClick={showSettings}
+                  style={{ ...accountMenuItem, justifyContent: "space-between" }}
+                >
+                  <span>设置</span>
+                  <span style={accountMenuStatus}>
+                    {mcpConnections.length > 0 ? `${mcpConnections.length} 个 MCP 服务` : "MCP 未配置"}
+                  </span>
+                </button>
+
                 {authed && (
                   <>
                     <button
@@ -813,6 +875,13 @@ export function TitleBar({ sharedView = false }: { sharedView?: boolean }) {
         <AccountSettingsDialog
           open={accountSettingsOpen}
           onClose={closeAccountSettings}
+        />
+      )}
+
+      {!sharedView && (
+        <McpSettingsDialog
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
 

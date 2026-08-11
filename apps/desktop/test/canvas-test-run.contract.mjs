@@ -9,6 +9,10 @@ const canvasSession = readFileSync(
   resolve(root, "src/features/canvas/session/useCanvasSession.ts"),
   "utf8",
 );
+const executionController = readFileSync(
+  resolve(root, "src/features/canvas/execution/canvasExecutionController.ts"),
+  "utf8",
+);
 const fluxNode = readFileSync(resolve(root, "src/features/canvas/FluxNode.tsx"), "utf8");
 const api = readFileSync(resolve(root, "src/lib/api.ts"), "utf8");
 
@@ -46,7 +50,9 @@ const requirements = [
   [
     "canvas test run saves the current graph before running the draft workflow",
     (source) =>
-      /const executeDraftRun = useCallback[\s\S]*await saveNow\(\)[\s\S]*runDraftExecution\(id, inputs,/.test(source) &&
+      /useCanvasExecutionController\(\{[\s\S]*runDraft: runDraftExecution/.test(source) &&
+      /runtimeInputs: runtimeInputDescriptors,[\s\S]*saveWorkflow: saveNow,[\s\S]*getWorkflowId:/.test(source) &&
+      /async run\(request: CanvasExecutionRunRequest\)[\s\S]*await request\.saveWorkflow\(\)[\s\S]*this\.ports\.runDraft/.test(executionController) &&
       /const saveNow = useCallback[\s\S]*persist\(signatureRef\.current, "save"\)/.test(canvasSession),
     canvasView,
   ],

@@ -34,8 +34,6 @@ import {
 import {
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
-  type ExecutionDetail,
-  type ExecutionNodeInputs,
   type NodeRunRecord,
   type WorkflowRecord,
 } from "@flux/shared";
@@ -51,7 +49,6 @@ import {
 import {
   approveExecutionAndContinue,
   runDraftExecution,
-  type ExecutionResponse,
 } from "../../lib/executionGateway.js";
 import {
   formatExecutionMessage,
@@ -69,6 +66,8 @@ import { NodeInspector } from "./NodeInspector.js";
 import { ConflictDialog } from "./ConflictDialog.js";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu.js";
 import { CanvasNodePalette } from "./CanvasNodePalette.js";
+import { useCustomNodeStore } from "../node-studio/store/customNodeStore.js";
+import { useWorkspaceStore } from "../../store/workspaceStore.js";
 import { ShareWorkflowDialog } from "../sharing/ShareWorkflowDialog.js";
 import {
   CanvasSelectionLayer,
@@ -78,6 +77,7 @@ import { buildNodeBusinessPresentation } from "./nodeBusinessSurface.js";
 import {
   createCanvasHandleId,
 } from "./canvasHandles.js";
+import { buildCanvasConnectionIndex } from "./canvasRenderIndex.js";
 import {
   createEdgeAtomically,
   reconnectEdgeAtomically,
@@ -89,6 +89,8 @@ import { useCanvasConnectionController } from "./connection/useCanvasConnectionC
 import { useCanvasSelectionController } from "./selection/useCanvasSelectionController.js";
 import { useCanvasHistoryController } from "./history/useCanvasHistoryController.js";
 import { useCanvasKeyboardController } from "./keyboard/useCanvasKeyboardController.js";
+import { useCanvasExecutionController } from "./execution/useCanvasExecutionController.js";
+import type { CanvasRuntimeInputDescriptor } from "./execution/canvasExecution.js";
 import {
   createFluxNode,
   fromWorkflowGraph,
@@ -100,6 +102,8 @@ import {
   useWorkflowCommands,
 } from "../../app/WorkflowCommandProvider.js";
 import { useCanvasSession } from "./session/useCanvasSession.js";
+import { subscribeScheduledExecutionProgress } from "../../lib/localSchedulerEvents.js";
+import { useMcpConnectionStore } from "../capabilities/store/mcpConnectionStore.js";
 
 let counter = 0;
 const nextId = () => `n${++counter}`;
@@ -114,24 +118,6 @@ interface GraphSnapshot {
   nodes: Node<FluxNodeData>[];
   edges: Edge[];
   groups: CanvasGroup[];
-}
-
-function missingRuntimeInputFields(
-  node: Node<FluxNodeData>,
-  value: Record<string, unknown>,
-  hasUpstream: boolean,
-): string[] {
-  const definition = registry.resolve(node.data.fluxType);
-  if (hasUpstream && definition?.runtimeInputPolicy === "fallback") return [];
-  const schema = definition?.runtimeInputSchema;
-  return (schema?.required ?? []).filter((key) => {
-    const fieldValue = value[key];
-    return (
-      fieldValue === undefined ||
-      fieldValue === null ||
-      (typeof fieldValue === "string" && !fieldValue.trim())
-    );
-  });
 }
 
 function bumpCounter(nodes: Node<FluxNodeData>[]) {
@@ -197,15 +183,6 @@ function instantiateWorkflowTemplate(templateId: string): {
   return { nodes, edges };
 }
 
-const paletteItems: CommandItem[] = catalogNodes.map((def) => ({
-  id: def.id,
-  label: def.name,
-  description: getNodeDefinitionSummary(def),
-  group: def.category,
-  keywords: [def.id, def.carrier, def.category],
-  accent: carrierColorVar[def.carrier as keyof typeof carrierColorVar],
-}));
-
 const TERMINAL_NODE_RUN_STATUS = new Set(["success", "failed", "skipped"]);
 
 function shouldIgnoreCanvasDoubleClick(target: EventTarget | null): boolean {
@@ -252,13 +229,6 @@ function equalGraphSnapshots(
 ): boolean {
   return graphSignature(left.nodes, left.edges, "", left.groups) ===
     graphSignature(right.nodes, right.edges, "", right.groups);
-}
-
-function getExecutionDisplayId(
-  display: ExecutionDetail | ExecutionResponse | null,
-): string | null {
-  if (!display) return null;
-  return "executionId" in display ? display.executionId : display.id;
 }
 
 function isGraphChangingNodeChange(change: NodeChange): boolean {
@@ -355,6 +325,24 @@ function compileCanvasExecutionOrder(
 
 export function CanvasView({ active = true }: { active?: boolean }) {
   const workflowCommands = useWorkflowCommands();
+  const customNodeDefinitions = useCustomNodeStore((state) => state.activeDefinitions);
+  const mcpNodeDefinitions = useMcpConnectionStore((state) => state.definitions);
+  const workspaceKind = useWorkspaceStore((state) => state.kind);
+  const paletteItems = useMemo<CommandItem[]>(
+    () => [
+      ...catalogNodes,
+      ...(workspaceKind === "local" ? customNodeDefinitions : []),
+      ...(workspaceKind === "local" ? mcpNodeDefinitions : []),
+    ].map((def) => ({
+      id: def.id,
+      label: def.name,
+      description: getNodeDefinitionSummary(def),
+      group: def.id.startsWith("custom.") ? `我的节点 · ${def.category}` : def.category,
+      keywords: [def.id, def.carrier, def.category, def.id.startsWith("custom.") ? "自定义 我的节点" : ""],
+      accent: carrierColorVar[def.carrier as keyof typeof carrierColorVar],
+    })),
+    [customNodeDefinitions, mcpNodeDefinitions, workspaceKind],
+  );
   const [nodes, setNodes] = useNodesState<Node<FluxNodeData>>(
     seedNodes(),
   );
@@ -385,12 +373,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
-  const [testRunDetail, setTestRunDetail] = useState<ExecutionDetail | null>(null);
-  const [testRunResult, setTestRunResult] = useState<ExecutionResponse | null>(null);
-  const [testRunError, setTestRunError] = useState<string | null>(null);
-  const runtimeInputDraftsRef = useRef<ExecutionNodeInputs>({});
-  const [runtimeInputRevision, setRuntimeInputRevision] = useState(0);
-  const [runtimeInputError, setRuntimeInputError] = useState<string | null>(null);
   const insertPos = useRef<{ x: number; y: number } | null>(null);
   const insertSourceId = useRef<string | null>(null);
   const rf = useRef<ReactFlowInstance<Node<FluxNodeData>, Edge> | null>(null);
@@ -408,7 +390,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
 
   const fitViewRequestedRef = useRef(false);
   const fitViewTimerRef = useRef<number | null>(null);
-  const playbackTokenRef = useRef(0);
   const selectedEdgeDragRef = useRef<Edge | null>(null);
   const edgeIdCounterRef = useRef(0);
   const suppressNodeSelectionUntilRef = useRef(0);
@@ -427,7 +408,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
   const workflowTitle = useCanvasStore((s) => s.title);
   const workflowId = useCanvasStore((s) => s.workflowId);
   const setWorkflowTitle = useCanvasStore((s) => s.setTitle);
-  const testRunDisplay = testRunDetail ?? testRunResult;
 
   const scheduleFitView = useCallback(() => {
     fitViewRequestedRef.current = true;
@@ -456,6 +436,96 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     };
   }, [nodes, edges]);
 
+  const clearNodeRunState = useCallback(function clearNodeRunState() {
+    setNodes((current) => {
+      if (!current.some((node) => node.data.run)) return current;
+      return current.map((node) =>
+        node.data.run
+          ? { ...node, data: { ...node.data, run: undefined } }
+          : node,
+      );
+    });
+  }, [setNodes]);
+
+  const initializeNodeRunState = useCallback(function initializeNodeRunState() {
+    setNodes((current) =>
+      current.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          run: { status: NODE_RUN_STATUS.PENDING },
+        },
+      })),
+    );
+  }, [setNodes]);
+
+  const applyNodeRunState = useCallback(function applyNodeRunState(
+    runs: NodeRunRecord[],
+  ) {
+    const runMap = new Map(runs.map((run) => [run.nodeId, run]));
+    setNodes((current) =>
+      current.map((node) => {
+        const run = runMap.get(node.id);
+        if (!run) return node;
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            run: {
+              status: run.status,
+              outputCount: run.outputs ? Object.keys(run.outputs).length : 0,
+              outputs: run.outputs,
+              error: run.error,
+            },
+          },
+        };
+      }),
+    );
+  }, [setNodes]);
+
+  useEffect(() => subscribeScheduledExecutionProgress((detail) => {
+    const canvas = useCanvasStore.getState();
+    if (canvas.workflowId !== detail.workflowId || canvas.testing) return;
+    applyNodeRunState(detail.runs);
+  }), [applyNodeRunState]);
+
+  const execution = useCanvasExecutionController({
+    runDraft: runDraftExecution,
+    approveRun: approveExecutionAndContinue,
+    setTesting: (value) => useCanvasStore.getState().setTesting(value),
+    applyNodeRuns: applyNodeRunState,
+    clearNodeRuns: clearNodeRunState,
+    initializeNodeRuns: initializeNodeRunState,
+    selectNode: selection.selectNode,
+    wait: (milliseconds) => new Promise((resolve) => {
+      window.setTimeout(resolve, milliseconds);
+    }),
+    formatError: formatProductErrorMessage,
+  });
+  const testRunDisplay = execution.display;
+  const testRunError = execution.runError;
+  const runtimeInputError = execution.runtimeInputError;
+  const runtimeInputRevision = execution.runtimeInputRevision;
+  const clearStaleRunState = useCallback(function clearStaleRunState() {
+    execution.clear();
+  }, [execution.clear]);
+
+  const runtimeInputDescriptors = useMemo<CanvasRuntimeInputDescriptor[]>(
+    () => nodes.flatMap((node) => {
+      const definition = registry.resolve(node.data.fluxType);
+      const schema = definition?.runtimeInputSchema;
+      if (!schema) return [];
+      return [{
+        nodeId: node.id,
+        defaults: defaultsFromSchema(schema),
+        required: schema.required ?? [],
+        upstreamFallback: definition.runtimeInputPolicy === "fallback",
+        hasUpstream: edges.some((edge) => edge.target === node.id),
+      }];
+    }),
+    [nodes, edges],
+  );
+
   const resetCanvasDraft = useCallback(function resetCanvasDraft(
     templateId?: string,
   ) {
@@ -474,12 +544,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     selection.reset();
     setPaletteOpen(false);
     setPaletteAnchor(null);
-    setTestRunDetail(null);
-    setTestRunResult(null);
-    setTestRunError(null);
-    runtimeInputDraftsRef.current = {};
-    setRuntimeInputRevision((revision) => revision + 1);
-    setRuntimeInputError(null);
+    execution.reset();
     setMenu(null);
     insertPos.current = null;
     insertSourceId.current = null;
@@ -491,6 +556,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     scheduleFitView,
     selection.reset,
     history.reset,
+    execution.reset,
   ]);
 
   const applyWorkflowRecordToCanvas = useCallback(
@@ -511,9 +577,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       setNodes(ln);
       setEdges(le);
       setGroups(loadedGroups);
-      runtimeInputDraftsRef.current = {};
-      setRuntimeInputRevision((revision) => revision + 1);
-      setRuntimeInputError(null);
+      execution.reset();
       selection.reset();
       setPaletteOpen(false);
       setPaletteAnchor(null);
@@ -539,6 +603,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       scheduleFitView,
       selection.reset,
       history.reset,
+      execution.reset,
     ],
   );
 
@@ -596,38 +661,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     const snapshot = history.redo();
     if (snapshot) restoreGraphSnapshot(snapshot);
   }, [history.redo, restoreGraphSnapshot]);
-
-  const clearNodeRunState = useCallback(function clearNodeRunState() {
-    setNodes((current) => {
-      if (!current.some((node) => node.data.run)) return current;
-      return current.map((node) =>
-        node.data.run
-          ? { ...node, data: { ...node.data, run: undefined } }
-          : node,
-      );
-    });
-  }, [setNodes]);
-
-  const initializeNodeRunState = useCallback(function initializeNodeRunState() {
-    setNodes((current) =>
-      current.map((node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          run: { status: NODE_RUN_STATUS.PENDING },
-        },
-      })),
-    );
-  }, [setNodes]);
-
-  const clearStaleRunState = useCallback(function clearStaleRunState() {
-    playbackTokenRef.current += 1;
-    clearNodeRunState();
-    setTestRunDetail(null);
-    setTestRunResult(null);
-    setTestRunError(null);
-    setRuntimeInputError(null);
-  }, [clearNodeRunState]);
 
   const onCanvasNodesChange = useCallback(
     (changes: NodeChange<Node<FluxNodeData>>[]) => {
@@ -688,84 +721,6 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       selection.removeEdge,
     ],
   );
-
-  const applyNodeRunState = useCallback(function applyNodeRunState(
-    runs: NodeRunRecord[],
-  ) {
-    const runMap = new Map(runs.map((run) => [run.nodeId, run]));
-    setNodes((current) =>
-      current.map((node) => {
-        const run = runMap.get(node.id);
-        if (!run) return node;
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            run: {
-              status: run.status,
-              outputCount: run.outputs ? Object.keys(run.outputs).length : 0,
-              outputs: run.outputs,
-              error: run.error,
-            },
-          },
-        };
-      }),
-    );
-  }, [setNodes]);
-
-  const playExecutionResult = useCallback(async function playExecutionResult(
-    result: ExecutionResponse,
-    token: number,
-  ) {
-    const finalRunById = new Map(result.runs.map((run) => [run.nodeId, run]));
-    const visualRuns: NodeRunRecord[] = result.runs.map((run) => ({
-      nodeId: run.nodeId,
-      type: run.type,
-      status: NODE_RUN_STATUS.PENDING,
-    }));
-
-    const publishFrame = () => {
-      const snapshot: ExecutionResponse = {
-        ...result,
-        status: EXECUTION_STATUS.RUNNING,
-        runs: visualRuns.map((run) => ({ ...run })),
-      };
-      applyNodeRunState(snapshot.runs);
-      setTestRunDetail(null);
-      setTestRunResult(snapshot);
-    };
-
-    publishFrame();
-    for (const nodeId of result.order) {
-      if (playbackTokenRef.current !== token) return;
-      const finalRun = finalRunById.get(nodeId);
-      const visualRun = visualRuns.find((run) => run.nodeId === nodeId);
-      if (!finalRun || !visualRun) continue;
-      if (finalRun.status === NODE_RUN_STATUS.PENDING) break;
-
-      if (finalRun.status !== NODE_RUN_STATUS.SKIPPED) {
-        visualRun.status = NODE_RUN_STATUS.RUNNING;
-        publishFrame();
-        await new Promise((resolve) => window.setTimeout(resolve, 420));
-      }
-
-      if (playbackTokenRef.current !== token) return;
-      Object.assign(visualRun, finalRun);
-      publishFrame();
-      await new Promise((resolve) => window.setTimeout(resolve, 160));
-
-      if (
-        finalRun.status === NODE_RUN_STATUS.RUNNING ||
-        (finalRun.status === NODE_RUN_STATUS.FAILED && result.status === EXECUTION_STATUS.FAILED)
-      ) {
-        break;
-      }
-    }
-
-    if (playbackTokenRef.current !== token) return;
-    applyNodeRunState(result.runs);
-    setTestRunResult(result);
-  }, [applyNodeRunState]);
 
   const commitNewConnection = useCallback((connection: Connection) => {
     const validation = validateCanvasConnection({ connection, nodes, edges });
@@ -838,6 +793,16 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     setMenu(null);
   }, [edges, selection.selectEdge]);
 
+  const selectDuplicateConnection = useCallback((connection: Connection) => {
+    const duplicate = edges.find((edge) =>
+      edge.source === connection.source &&
+      edge.target === connection.target &&
+      edge.sourceHandle === connection.sourceHandle &&
+      edge.targetHandle === connection.targetHandle,
+    );
+    if (duplicate) selectConnectionEdge(duplicate.id);
+  }, [edges, selectConnectionEdge]);
+
   const screenToFlowPosition = useCallback((point: { x: number; y: number }) =>
     rf.current?.screenToFlowPosition(point) ?? null, []);
   const connectionController = useCanvasConnectionController({
@@ -847,6 +812,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     screenToFlowPosition,
     onCreate: commitNewConnection,
     onReconnect: commitEdgeReconnect,
+    onDuplicate: selectDuplicateConnection,
     onSelectEdge: selectConnectionEdge,
     onNotice: setError,
     onGestureStart: cancelScheduledFitView,
@@ -887,7 +853,9 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       if (insertedEdge) {
         setEdges((es) => [...es, insertedEdge]);
       }
-      selection.selectNode(node.id);
+      selection.selectNode(node.id, {
+        inspector: type.startsWith("capability.") ? "open" : "close",
+      });
       insertSourceId.current = null;
     },
     [
@@ -1395,7 +1363,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
         ? isErrorPath ? "var(--danger)" : "var(--accent)"
         : completedPath
           ? isErrorPath ? "var(--danger)" : "var(--success)"
-          : isErrorPath ? "color-mix(in srgb, var(--danger) 60%, var(--border-strong))" : "var(--border-strong)";
+          : isErrorPath ? "color-mix(in srgb, var(--danger) 72%, var(--canvas-edge))" : "var(--canvas-edge)";
 
       return {
         ...edge,
@@ -1434,7 +1402,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
         style: {
           ...(edge.style ?? {}),
           stroke: isSelected ? isErrorPath ? "var(--danger)" : "var(--accent)" : stroke,
-          strokeWidth: isSelected ? 2.25 : runningPath ? 2.2 : completedPath ? 1.8 : 1.35,
+          strokeWidth: isSelected ? 2.4 : runningPath ? 2.2 : completedPath ? 2 : 1.75,
           strokeLinecap: "round" as const,
           filter: runningPath
             ? `drop-shadow(0 0 2px ${isErrorPath ? "var(--danger)" : "var(--accent)"})`
@@ -1567,98 +1535,17 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     }
   }, [saveNow]);
 
-  const executeDraftRun = useCallback(async (
-    inputs: ExecutionNodeInputs = {},
-  ) => {
-    const playbackToken = ++playbackTokenRef.current;
-    let observedActiveNode = false;
-    setError(null);
-    setTestRunDetail(null);
-    setTestRunResult(null);
-    setTestRunError(null);
-    clearNodeRunState();
-    initializeNodeRunState();
-    useCanvasStore.getState().setTesting(true);
-    try {
-      const saved = await saveNow();
-      if (!saved) {
-        throw new Error(useCanvasStore.getState().error ?? "请先保存工作流");
-      }
-      const id = useCanvasStore.getState().workflowId;
-      if (!id) throw new Error("请先保存工作流");
-      const result = await runDraftExecution(id, inputs, (detail) => {
-        const hasActiveNode = detail.runs.some(
-          (run) => run.status === NODE_RUN_STATUS.RUNNING,
-        );
-        observedActiveNode ||= hasActiveNode;
-        if (detail.status === EXECUTION_STATUS.RUNNING || hasActiveNode) {
-          applyNodeRunState(detail.runs);
-          setTestRunDetail(detail);
-        }
-      });
-      if (!observedActiveNode && result.runs.length > 0) {
-        await playExecutionResult(result, playbackToken);
-      } else {
-        applyNodeRunState(result.runs);
-        setTestRunResult(result);
-        setTestRunDetail(null);
-      }
-    } catch (err) {
-      clearNodeRunState();
-      setTestRunError(formatProductErrorMessage(err, "执行工作流失败"));
-    } finally {
-      useCanvasStore.getState().setTesting(false);
-    }
-  }, [
-    saveNow,
-    clearNodeRunState,
-    initializeNodeRunState,
-    applyNodeRunState,
-    playExecutionResult,
-  ]);
-
-  const updateRuntimeInput = useCallback((
-    nodeId: string,
-    value: Record<string, unknown>,
-  ) => {
-    playbackTokenRef.current += 1;
-    clearNodeRunState();
-    setTestRunDetail(null);
-    setTestRunResult(null);
-    setTestRunError(null);
-    setRuntimeInputError(null);
-    runtimeInputDraftsRef.current = {
-      ...runtimeInputDraftsRef.current,
-      [nodeId]: value,
-    };
-  }, [clearNodeRunState]);
+  const updateRuntimeInput = execution.updateRuntimeInput;
 
   const onTestRun = useCallback(async () => {
-    const inputNodes = nodes.filter((node) =>
-      Boolean(registry.resolve(node.data.fluxType)?.runtimeInputSchema),
-    );
-    const inputs: ExecutionNodeInputs = {};
-    for (const node of inputNodes) {
-      const schema = registry.resolve(node.data.fluxType)?.runtimeInputSchema;
-      inputs[node.id] = runtimeInputDraftsRef.current[node.id] ?? defaultsFromSchema(schema);
-    }
-
-    const missingNode = inputNodes.find((node) =>
-      missingRuntimeInputFields(
-        node,
-        inputs[node.id] ?? {},
-        edges.some((edge) => edge.target === node.id),
-      ).length > 0,
-    );
-    if (missingNode) {
-      setRuntimeInputError("请完成本次运行所需的输入");
-      selection.selectNode(missingNode.id);
-      return;
-    }
-
-    setRuntimeInputError(null);
-    await executeDraftRun(inputs);
-  }, [nodes, edges, executeDraftRun, selection.selectNode]);
+    setError(null);
+    await execution.run({
+      runtimeInputs: runtimeInputDescriptors,
+      saveWorkflow: saveNow,
+      getWorkflowId: () => useCanvasStore.getState().workflowId,
+      getSaveError: () => useCanvasStore.getState().error,
+    });
+  }, [execution.run, runtimeInputDescriptors, saveNow]);
 
   const addNodeFromCommand = useCallback(() => {
     openNodePaletteAtScreenPoint({
@@ -1695,41 +1582,11 @@ export function CanvasView({ active = true }: { active?: boolean }) {
   });
 
   const approvePausedRun = useCallback(
-    async (decision: "approved" | "rejected") => {
-      const display = testRunDetail ?? testRunResult;
-      const executionId = getExecutionDisplayId(display);
-      const approvalRun = display?.runs.find(
-        (run) =>
-          run.status === NODE_RUN_STATUS.RUNNING &&
-          run.type === "flux.business.humanReview",
-      );
-      if (!executionId || !approvalRun) return;
-
+    (decision: "approved" | "rejected") => {
       setError(null);
-      setTestRunError(null);
-      useCanvasStore.getState().setTesting(true);
-      try {
-        const result = await approveExecutionAndContinue(
-          executionId,
-          {
-            nodeId: approvalRun.nodeId,
-            decision,
-          },
-          (detail) => {
-            applyNodeRunState(detail.runs);
-            setTestRunDetail(detail);
-          },
-        );
-        applyNodeRunState(result.runs);
-        setTestRunResult(result);
-        setTestRunDetail(null);
-      } catch (err) {
-        setTestRunError(formatProductErrorMessage(err, "人工确认失败"));
-      } finally {
-        useCanvasStore.getState().setTesting(false);
-      }
+      return execution.approve(decision);
     },
-    [applyNodeRunState, testRunDetail, testRunResult],
+    [execution.approve],
   );
 
   const canvasRunProgress = useMemo(() => {
@@ -1799,20 +1656,29 @@ export function CanvasView({ active = true }: { active?: boolean }) {
     () => nodes.filter((node) => selectedNodeIdSet.has(node.id)),
     [nodes, selectedNodeIdSet],
   );
+  const nodeById = useMemo(
+    () => new Map(nodes.map((node) => [node.id, node])),
+    [nodes],
+  );
   const selectionBounds = useMemo(
     () => selectedNodes.length > 1 ? getNodesBounds(selectedNodes) : null,
     [selectedNodes],
   );
   const groupLayouts = useMemo<CanvasGroupLayout[]>(() => groups.flatMap((group) => {
-    const groupNodeIds = new Set(group.nodeIds);
-    const members = nodes.filter((node) => groupNodeIds.has(node.id));
+    const members = group.nodeIds
+      .map((nodeId) => nodeById.get(nodeId))
+      .filter((node): node is Node<FluxNodeData> => Boolean(node));
     return members.length >= 2
       ? [{ group, bounds: getNodesBounds(members) }]
       : [];
-  }), [groups, nodes]);
+  }), [groups, nodeById]);
   const selectedEdgeForRender = useMemo(
     () => edges.find((edge) => edge.id === selectedEdgeId),
     [edges, selectedEdgeId],
+  );
+  const connectionIndex = useMemo(
+    () => buildCanvasConnectionIndex(edges),
+    [edges],
   );
 
   const nodesForRender = useMemo<Node<FluxNodeData>[]>(
@@ -1853,6 +1719,8 @@ export function CanvasView({ active = true }: { active?: boolean }) {
           connectionController.session.candidate.port.nodeId === node.id
             ? [connectionController.session.candidate.port.handleId]
             : [];
+        const connectedConnectionHandleIds =
+          connectionIndex.connectedHandlesByNode.get(node.id) ?? [];
 
         return {
           ...node,
@@ -1864,6 +1732,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
             allowHoverToolbar:
               (selectedNodeIds.length === 0 && selectedEdgeId === null) ||
               (selectedNodeIds.length === 1 && selectedNodeIdSet.has(node.id)),
+            connectedConnectionHandleIds,
             selectedConnectionHandleIds,
             candidateConnectionHandleIds,
             invalidConnectionHandleIds,
@@ -1871,16 +1740,17 @@ export function CanvasView({ active = true }: { active?: boolean }) {
             showRunOutput: deliveryNodeIds.has(node.id),
             isErrorHandler: definition?.executionRole === "error-handler",
             presentation: definition
-              ? buildNodeBusinessPresentation(definition, deliveryNodeIds.has(node.id))
+              ? buildNodeBusinessPresentation(definition)
               : undefined,
             runtimeInput: runtimeSchema
               ? {
                   schema: toFormSchema(runtimeSchema),
                   draftKey: `${runtimeInputRevision}:${node.id}`,
-                  initialValue: runtimeInputDraftsRef.current[node.id] ?? defaultsFromSchema(runtimeSchema),
+                  initialValue: execution.getRuntimeInput(node.id) ?? defaultsFromSchema(runtimeSchema),
                   error: node.id === selectedId ? runtimeInputError : null,
                   disabled: testing,
-                  upstreamConnected: edges.some((edge) => edge.target === node.id),
+                  upstreamConnected:
+                    connectionIndex.nodesWithIncomingEdges.has(node.id),
                   onChange: (value: FormValue) => updateRuntimeInput(node.id, value),
                 }
               : undefined,
@@ -1914,7 +1784,7 @@ export function CanvasView({ active = true }: { active?: boolean }) {
       }),
     [
       nodes,
-      edges,
+      connectionIndex,
       canvasRunProgress,
       selectedId,
       selectedNodeIds,

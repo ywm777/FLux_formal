@@ -29,10 +29,20 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 
-# Local databases
-*.sqlite
-*.sqlite3
-*.db
+# Local databases & runtime data（落在工作区 data/，不进 C 盘 AppData）
+data/*
+!data/.gitkeep
 
 # Test / coverage
 coverage/
+test-results/
+
+# Local browser and QA artifacts
+.playwright-cli/
+output/
+
+# App runtime data
+apps/data/
+
+# Local visual brainstorming sessions
+.superpowers/

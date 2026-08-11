@@ -35,11 +35,11 @@
 **Files:**
 - Create: `e2e/canvas-execution.spec.ts`
 
-- [ ] **Step 1: Add a deterministic local workflow**
+- [x] **Step 1: Add a deterministic local workflow**
 
 使用本地工作区快照创建一个未连接的 `flux.input.text` 节点。运行按钮第一次触发输入预检，填写“文本内容”后第二次运行走本地执行端口。
 
-- [ ] **Step 2: Characterize preflight and completion**
+- [x] **Step 2: Characterize preflight and completion**
 
 ```ts
 await page.getByRole("button", { name: "执行工作流" }).click();
@@ -52,7 +52,7 @@ await expect(node.getByLabel(/过程状态：已完成/)).toBeVisible();
 await expect(page.getByLabel(/运行进度：执行成功，1\/1/)).toBeVisible();
 ```
 
-- [ ] **Step 3: Run and commit characterization**
+- [x] **Step 3: Run and commit characterization**
 
 ```powershell
 pnpm exec playwright test -c e2e/playwright.config.ts e2e/canvas-execution.spec.ts --workers=1
@@ -69,11 +69,11 @@ Expected: behavior passes before extraction.
 - Create: `apps/desktop/src/features/canvas/execution/canvasExecution.ts`
 - Modify: `apps/desktop/package.json`
 
-- [ ] **Step 1: Add failing pure-policy tests**
+- [x] **Step 1: Add failing pure-policy tests**
 
 覆盖：默认输入与草稿合并、首个缺失节点、连接上游时 fallback 免填、回放帧顺序、暂停人工确认节点和执行 ID 解析。
 
-- [ ] **Step 2: Add failing controller concurrency tests**
+- [x] **Step 2: Add failing controller concurrency tests**
 
 使用 deferred promise 和假端口证明：
 
@@ -82,7 +82,7 @@ Expected: behavior passes before extraction.
 - `clear` 会使在途会话失效并关闭全局 testing；
 - 人工确认只对当前暂停会话调用端口。
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 ```powershell
 pnpm --filter @flux/desktop test:unit
@@ -90,11 +90,11 @@ pnpm --filter @flux/desktop test:unit
 
 Expected: FAIL because execution policy and controller modules do not exist.
 
-- [ ] **Step 4: Implement the minimum pure policy and controller**
+- [x] **Step 4: Implement the minimum pure policy and controller**
 
 控制器维护不可变快照、运行时草稿、递增会话令牌和订阅器。所有异步回调在写状态前检查令牌；旧会话的 `finally` 不得将新会话的 testing 设为 false。
 
-- [ ] **Step 5: Run GREEN and commit**
+- [x] **Step 5: Run GREEN and commit**
 
 ```powershell
 pnpm --filter @flux/desktop test:unit
@@ -108,15 +108,15 @@ git commit -m "refactor: add canvas execution controller"
 - Create: `apps/desktop/src/features/canvas/execution/useCanvasExecutionController.ts`
 - Create: `apps/desktop/test/canvas-execution-controller.contract.mjs`
 
-- [ ] **Step 1: Add a failing boundary contract**
+- [x] **Step 1: Add a failing boundary contract**
 
 契约要求纯策略和控制器不导入 React、React Flow、Zustand、Tauri、store、API 或执行网关；Hook 使用 `useSyncExternalStore`；`CanvasView` 导入 Hook 并通过端口组合具体能力。
 
-- [ ] **Step 2: Implement the thin Hook**
+- [x] **Step 2: Implement the thin Hook**
 
 Hook 在首次渲染创建控制器，每次渲染更新端口，订阅快照，并在卸载时使在途会话失效。
 
-- [ ] **Step 3: Keep RED until composition is complete**
+- [x] **Step 3: Keep RED until composition is complete**
 
 边界契约与 `CanvasView` 接线在 Task 4 一起提交，避免保留故意失败的分支状态。
 
@@ -128,23 +128,23 @@ Hook 在首次渲染创建控制器，每次渲染更新端口，订阅快照，
 - Modify: `apps/desktop/test/runtime-input-preflight.contract.mjs`
 - Modify: `apps/desktop/test/product-error-message.contract.mjs`
 
-- [ ] **Step 1: Keep only projection adapters in `CanvasView`**
+- [x] **Step 1: Keep only projection adapters in `CanvasView`**
 
 保留三个 React Flow 适配函数：清空节点运行投影、初始化 pending 投影、把普通 `NodeRunRecord[]` 应用到节点。删除画布内的执行详情/result/error state、播放令牌和回放循环。
 
-- [ ] **Step 2: Build plain runtime-input descriptors**
+- [x] **Step 2: Build plain runtime-input descriptors**
 
 从注册表和连线派生 `{ nodeId, defaults, required, upstreamFallback, hasUpstream }`，控制器只接收这些普通值和草稿，不接收节点或连线实例。
 
-- [ ] **Step 3: Wire session, store, and gateway ports**
+- [x] **Step 3: Wire session, store, and gateway ports**
 
 组合 `saveNow`、当前 workflow ID/保存错误、`runDraftExecution`、`approveExecutionAndContinue`、`setTesting`、节点投影和选择动作。图编辑调用控制器 `clear`；打开/新建工作流调用 `reset`。
 
-- [ ] **Step 4: Preserve product projection**
+- [x] **Step 4: Preserve product projection**
 
 顶部进度继续由执行快照派生；节点 action 继续读取当前草稿、错误和人工确认状态；命令协调器的 `testRun` 指向控制器入口。
 
-- [ ] **Step 5: Run integration GREEN and commit**
+- [x] **Step 5: Run integration GREEN and commit**
 
 ```powershell
 node apps/desktop/test/canvas-execution-controller.contract.mjs
@@ -162,7 +162,7 @@ git commit -m "refactor: integrate canvas execution control"
 **Files:**
 - Modify: `docs/superpowers/specs/2026-07-20-canvas-interaction-architecture-design.md`
 
-- [ ] **Step 1: Run fresh automated regression**
+- [x] **Step 1: Run fresh automated regression**
 
 ```powershell
 pnpm --filter @flux/desktop typecheck
@@ -172,11 +172,11 @@ node test/architecture-boundaries.contract.mjs
 pnpm exec playwright test -c e2e/playwright.config.ts e2e/canvas-execution.spec.ts e2e/canvas-keyboard.spec.ts e2e/canvas-history.spec.ts e2e/canvas-box-selection.spec.ts e2e/edge-selection-mode.spec.ts e2e/view-switch-continuity.spec.ts --workers=1
 ```
 
-- [ ] **Step 2: Verify the real Tauri window after full reload**
+- [x] **Step 2: Verify the real Tauri window after full reload**
 
 完整刷新后实际检查：缺少运行输入时定位并提示节点；填写后运行，顶部进度和节点状态完成；立即连续运行不会被旧结果覆盖；人工确认工作流仍可继续；DevTools 无新增红色异常。
 
-- [ ] **Step 3: Record and commit evidence**
+- [x] **Step 3: Record and commit evidence**
 
 ```powershell
 git add -- docs/superpowers/specs/2026-07-20-canvas-interaction-architecture-design.md

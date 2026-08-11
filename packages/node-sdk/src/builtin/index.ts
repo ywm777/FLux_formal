@@ -1,5 +1,6 @@
 import { defineNode } from "../registry.js";
 import type { NodeDefinition } from "../types.js";
+import { evaluateCondition } from "./expression.js";
 
 /** 1. 手动触发：工作流入口 */
 export const manualTriggerNode = defineNode({
@@ -13,6 +14,55 @@ export const manualTriggerNode = defineNode({
   configSchema: { type: "object", properties: {} },
   async execute() {
     return { outputs: { out: { startedAt: new Date().toISOString() } } };
+  },
+});
+
+/** 1b. 定时触发（Cron）：由桌面端本地调度器按计划唤醒已保存的工作流；
+ * 节点被执行时发出包含实际触发时间的“开始”信号。 */
+export const cronTriggerNode = defineNode({
+  id: "flux.trigger.cron",
+  name: "定时触发",
+  category: "触发器",
+  icon: "clock",
+  version: "0.1.0",
+  carrier: "trigger",
+  ports: { inputs: [], outputs: [{ id: "out", name: "开始" }] },
+  configSchema: {
+    type: "object",
+    required: ["cron"],
+    properties: {
+      enabled: {
+        type: "boolean",
+        title: "启用定时执行",
+        description: "关闭后保留计划设置，但不会自动触发工作流",
+        default: true,
+      },
+      cron: {
+        type: "string",
+        title: "Cron 表达式（高级）",
+        description: "画布中可直接选择执行频率和时间；仅复杂计划需要填写标准 5 段 Cron",
+        default: "0 9 * * *",
+      },
+      timezone: {
+        type: "string",
+        title: "时区",
+        description: "例如 Asia/Shanghai 表示北京时间",
+        default: "Asia/Shanghai",
+      },
+    },
+  },
+  async execute(ctx) {
+    const { enabled = true, cron = "0 9 * * *", timezone = "Asia/Shanghai" } = ctx.config as {
+      enabled?: boolean;
+      cron?: string;
+      timezone?: string;
+    };
+    ctx.log("info", `定时触发 (cron: ${cron}, tz: ${timezone}, enabled: ${enabled})`);
+    return {
+      outputs: {
+        out: { triggeredAt: new Date().toISOString(), cron, timezone, enabled },
+      },
+    };
   },
 });
 
@@ -122,25 +172,24 @@ export const conditionNode = defineNode({
   },
   async execute(ctx) {
     const expr = String((ctx.config as { expression?: string }).expression ?? "false");
-    let result = false;
     try {
-      // 占位实现：真实环境应在沙箱中求值（见 PRD 安全约束）
-      const fn = new Function("input", `return (${expr});`);
-      result = Boolean(fn(ctx.inputs));
+      const result = evaluateCondition(expr, ctx.inputs);
+      return result
+        ? { outputs: { true: ctx.inputs } }
+        : { outputs: { false: ctx.inputs } };
     } catch (err) {
-      ctx.log("error", `条件表达式求值失败: ${(err as Error).message}`);
+      const message = `条件表达式求值失败: ${(err as Error).message}`;
+      ctx.log("error", message);
+      throw new Error(message);
     }
-    return result
-      ? { outputs: { true: ctx.inputs } }
-      : { outputs: { false: ctx.inputs } };
   },
 });
 
-/** 5. 日志输出 */
+/** 5. 记录结果 */
 export const logNode = defineNode({
   id: "flux.action.log",
-  name: "日志输出",
-  category: "调试",
+  name: "记录结果",
+  category: "输出",
   icon: "file-text",
   version: "0.1.0",
   carrier: "basic",
@@ -163,10 +212,146 @@ export const logNode = defineNode({
   },
 });
 
+import { aiAnalyzeNode, aiGenerateNode, aiNodes } from "./ai.js";
+import { collectionNodes } from "./collections.js";
+import { dataNodes } from "./data.js";
+import { integrationNodes } from "./integrations.js";
+import { logicUtilityNodes } from "./logic-utilities.js";
+import {
+  errorCaptureNode,
+  jsonDisplayNode,
+  jsonFormatNode,
+  productivityNodes,
+  textConstantNode,
+  textInputNode,
+} from "./productivity.js";
+import {
+  structuredFormatNodes,
+  xmlConvertNode,
+  yamlConvertNode,
+} from "./structured-formats.js";
+import { textNodes } from "./text.js";
+import { businessNodes } from "./business.js";
+import { customerSupportNodes } from "./customer-support.js";
+import { operationsNodes } from "./operations.js";
+import { sharedBusinessNodes } from "./shared-business.js";
+
+const scenarioNodes: NodeDefinition[] = [
+  ...businessNodes,
+  ...customerSupportNodes,
+  ...operationsNodes,
+  ...sharedBusinessNodes,
+];
+
+/**
+ * 当前对用户开放的内置能力目录。
+ *
+ * `builtinNodes` 是执行时注册表，必须继续包含历史节点，确保已有工作流可读取、
+ * 可执行；`catalogNodes` 只控制新建节点入口。两者分离后，整理能力目录不会破坏
+ * 已保存的工作流。
+ */
+export const catalogNodes: NodeDefinition[] = [
+  textInputNode,
+  textConstantNode,
+  jsonFormatNode,
+  xmlConvertNode,
+  yamlConvertNode,
+  httpRequestNode,
+  aiAnalyzeNode,
+  aiGenerateNode,
+  conditionNode,
+  delayNode,
+  errorCaptureNode,
+  jsonDisplayNode,
+  manualTriggerNode,
+  cronTriggerNode,
+  logNode,
+];
+
 export const builtinNodes: NodeDefinition[] = [
   manualTriggerNode,
+  cronTriggerNode,
   httpRequestNode,
   delayNode,
   conditionNode,
   logNode,
+  ...dataNodes,
+  ...aiNodes,
+  ...textNodes,
+  ...collectionNodes,
+  ...logicUtilityNodes,
+  ...integrationNodes,
+  ...structuredFormatNodes,
+  ...productivityNodes,
+  ...scenarioNodes,
 ];
+
+export { customCodeNode } from "./custom-code.js";
+export {
+  setValueNode,
+  templateNode,
+  extractNode,
+  jsonNode,
+  dataNodes,
+} from "./data.js";
+export {
+  textTransformNode,
+  regexExtractNode,
+  base64Node,
+  textNodes,
+} from "./text.js";
+export {
+  objectMergeNode,
+  listTransformNode,
+  csvNode,
+  collectionNodes,
+} from "./collections.js";
+export {
+  mathNode,
+  switchNode,
+  validateNode,
+  logicUtilityNodes,
+} from "./logic-utilities.js";
+export {
+  dateTimeNode,
+  urlBuilderNode,
+  httpBatchNode,
+  integrationNodes,
+} from "./integrations.js";
+export {
+  textConstantNode,
+  textInputNode,
+  errorCaptureNode,
+  jsonFormatNode,
+  jsonDisplayNode,
+  productivityNodes,
+} from "./productivity.js";
+export {
+  xmlConvertNode,
+  yamlConvertNode,
+  structuredFormatNodes,
+} from "./structured-formats.js";
+export {
+  leadIntakeNode,
+  leadScoreNode,
+  humanReviewNode,
+  crmArchiveNode,
+  ownerNotifyNode,
+  businessNodes,
+} from "./business.js";
+export {
+  caseIntakeNode,
+  caseTriageNode,
+  supportReplyDraftNode,
+  customerSupportNodes,
+} from "./customer-support.js";
+export {
+  requestIntakeNode,
+  policyCheckNode,
+  operationsNodes,
+} from "./operations.js";
+export {
+  recordArchiveNode,
+  teamNotifyNode,
+  sharedBusinessNodes,
+} from "./shared-business.js";

@@ -23,6 +23,7 @@
       "@flux/shared": ["packages/shared/src/index.ts"],
       "@flux/workflow-schema": ["packages/workflow-schema/src/index.ts"],
       "@flux/node-sdk": ["packages/node-sdk/src/index.ts"],
+      "@flux/workflow-runtime": ["packages/workflow-runtime/src/index.ts"],
       "@flux/canvas-core": ["packages/canvas-core/src/index.ts"],
       "@flux/ui": ["packages/ui/src/index.ts"]
     }

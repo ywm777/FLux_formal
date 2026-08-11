@@ -1,17 +1,33 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
 import { useAppStore } from "./store/appStore.js";
 import { useAuthStore } from "./store/authStore.js";
 import { TitleBar } from "./components/TitleBar.js";
 import { StatusBar } from "./components/StatusBar.js";
-import { CanvasView } from "./features/canvas/CanvasView.js";
 import { WorkbenchView } from "./features/workbench/WorkbenchView.js";
 import { LoginView } from "./features/auth/LoginView.js";
 import { BrandMark } from "./components/BrandMark.js";
 import { AiConnectionDrawer } from "./features/ai/AiConnectionDrawer.js";
-import { SharedWorkflowView } from "./features/sharing/SharedWorkflowView.js";
 import { useCanvasStore } from "./store/canvasStore.js";
 import { useWorkspaceStore } from "./store/workspaceStore.js";
 import { useWorkflowCommands } from "./app/WorkflowCommandProvider.js";
+import { useCustomNodeStore } from "./features/node-studio/store/customNodeStore.js";
+import { localWorkflowScheduler } from "./lib/localWorkflowScheduler.js";
+import { useMcpConnectionStore } from "./features/capabilities/store/mcpConnectionStore.js";
+
+const NodeStudioView = lazy(async () => {
+  const module = await import("./features/node-studio/NodeStudioView.js");
+  return { default: module.NodeStudioView };
+});
+
+const CanvasView = lazy(async () => {
+  const module = await import("./features/canvas/CanvasView.js");
+  return { default: module.CanvasView };
+});
+
+const SharedWorkflowView = lazy(async () => {
+  const module = await import("./features/sharing/SharedWorkflowView.js");
+  return { default: module.SharedWorkflowView };
+});
 
 export function App() {
   const workflowCommands = useWorkflowCommands();
@@ -25,15 +41,23 @@ export function App() {
   const bootstrapWorkspace = useWorkspaceStore((s) => s.bootstrap);
   const setWorkspaceKind = useWorkspaceStore((s) => s.setKind);
   const closeCloudAccess = useWorkspaceStore((s) => s.closeCloudAccess);
+  const loadCustomNodes = useCustomNodeStore((s) => s.load);
+  const customNodeLoadStatus = useCustomNodeStore((s) => s.loadStatus);
+  const loadMcpConnections = useMcpConnectionStore((s) => s.load);
+  const mcpConnectionLoadStatus = useMcpConnectionStore((s) => s.loadStatus);
   const [shareId, setShareId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get("share"),
   );
   const [shareLoginRequested, setShareLoginRequested] = useState(false);
+  const [canvasVisited, setCanvasVisited] = useState(false);
+  const [nodeStudioVisited, setNodeStudioVisited] = useState(false);
 
   useEffect(() => {
     void bootstrapWorkspace();
     void bootstrapAuth();
-  }, [bootstrapAuth, bootstrapWorkspace]);
+    void loadCustomNodes();
+    void loadMcpConnections();
+  }, [bootstrapAuth, bootstrapWorkspace, loadCustomNodes, loadMcpConnections]);
 
   useEffect(() => {
     if (!workspaceReady || status === "loading") return;
@@ -63,6 +87,23 @@ export function App() {
     workspaceReady,
   ]);
 
+  useEffect(() => {
+    if (mode === "canvas") setCanvasVisited(true);
+    if (mode === "nodes") setNodeStudioVisited(true);
+  }, [mode]);
+
+  useEffect(() => {
+    const runtimeReady =
+      (customNodeLoadStatus === "ready" || customNodeLoadStatus === "error") &&
+      (mcpConnectionLoadStatus === "ready" || mcpConnectionLoadStatus === "error");
+    if (!workspaceReady || !runtimeReady || workspaceKind !== "local") {
+      localWorkflowScheduler.stop();
+      return;
+    }
+    void localWorkflowScheduler.start();
+    return () => localWorkflowScheduler.stop();
+  }, [customNodeLoadStatus, mcpConnectionLoadStatus, workspaceKind, workspaceReady]);
+
   const showingSharedView = Boolean(
     shareId && !(shareLoginRequested && status !== "authenticated"),
   );
@@ -86,6 +127,10 @@ export function App() {
 
   const recoveringWorkspace =
     !workspaceReady ||
+    customNodeLoadStatus === "idle" ||
+    customNodeLoadStatus === "loading" ||
+    mcpConnectionLoadStatus === "idle" ||
+    mcpConnectionLoadStatus === "loading" ||
     (workspaceKind === "cloud" && status !== "authenticated" && !cloudAccessIntent);
   const cloudLoginOpen = Boolean(
     cloudAccessIntent && status !== "authenticated",
@@ -116,13 +161,23 @@ export function App() {
             </span>
           </div>
         ) : shareId && showingSharedView ? (
-          <SharedWorkflowView
-            shareId={shareId}
-            authStatus={status}
-            onRequestLogin={() => setShareLoginRequested(true)}
-            onCopied={openCopiedWorkflow}
-            onBack={leaveSharedView}
-          />
+          <Suspense
+            fallback={(
+              <div className="app-loading-state" role="status">
+                <BrandMark size={32} />
+                <strong>正在打开共享工作流</strong>
+                <span>正在加载只读画布…</span>
+              </div>
+            )}
+          >
+            <SharedWorkflowView
+              shareId={shareId}
+              authStatus={status}
+              onRequestLogin={() => setShareLoginRequested(true)}
+              onCopied={openCopiedWorkflow}
+              onBack={leaveSharedView}
+            />
+          </Suspense>
         ) : shareLoginRequested && status !== "authenticated" ? (
           <LoginView onCancel={() => setShareLoginRequested(false)} />
         ) : (
@@ -144,7 +199,9 @@ export function App() {
                 }}
               >
                 <div
+                  className="app-view-layer"
                   data-app-view="workbench"
+                  data-view-state={mode === "workbench" ? "active" : "inactive"}
                   aria-hidden={mode !== "workbench"}
                   style={viewLayerStyle(mode === "workbench")}
                 >
@@ -154,14 +211,49 @@ export function App() {
                   />
                 </div>
                 <div
+                  className="app-view-layer"
                   data-app-view="canvas"
+                  data-view-state={mode === "canvas" ? "active" : "inactive"}
                   aria-hidden={mode !== "canvas"}
                   style={viewLayerStyle(mode === "canvas")}
                 >
-                  <CanvasView
-                    key={workspaceKind}
-                    active={mode === "canvas"}
-                  />
+                  {(canvasVisited || mode === "canvas") && (
+                    <Suspense
+                      fallback={(
+                        <div className="app-loading-state" role="status">
+                          <BrandMark size={32} />
+                          <strong>正在打开画布</strong>
+                          <span>正在加载画布与节点运行时…</span>
+                        </div>
+                      )}
+                    >
+                      <CanvasView
+                        key={workspaceKind}
+                        active={mode === "canvas"}
+                      />
+                    </Suspense>
+                  )}
+                </div>
+                <div
+                  className="app-view-layer"
+                  data-app-view="nodes"
+                  data-view-state={mode === "nodes" ? "active" : "inactive"}
+                  aria-hidden={mode !== "nodes"}
+                  style={viewLayerStyle(mode === "nodes")}
+                >
+                  {(nodeStudioVisited || mode === "nodes") && (
+                    <Suspense
+                      fallback={(
+                        <div className="app-loading-state" role="status">
+                          <BrandMark size={32} />
+                          <strong>正在打开节点设计器</strong>
+                          <span>正在加载你的节点规则与草案…</span>
+                        </div>
+                      )}
+                    >
+                      <NodeStudioView active={mode === "nodes"} />
+                    </Suspense>
+                  )}
                 </div>
               </div>
               {status === "authenticated" && <AiConnectionDrawer />}
@@ -192,6 +284,7 @@ function viewLayerStyle(active: boolean): CSSProperties {
     minHeight: 0,
     overflow: "hidden",
     opacity: active ? 1 : 0,
+    transform: active ? "translate3d(0, 0, 0)" : "translate3d(8px, 0, 0)",
     pointerEvents: active ? "auto" : "none",
     zIndex: active ? 1 : 0,
   };

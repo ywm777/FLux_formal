@@ -62,7 +62,7 @@ const requirements = [
   ],
   [
     "new workflow reset keeps templates populated and clears transient canvas surfaces",
-    /function resetCanvasDraft\([\s\S]*templateId\?: string[\s\S]*const freshNodes = seedNodes\(\)[\s\S]*setNodes\(freshNodes\)[\s\S]*setEdges\(freshEdges\)[\s\S]*selection\.reset\(\)[\s\S]*setTestRunDetail\(null\)[\s\S]*setTestRunResult\(null\)[\s\S]*setTestRunError\(null\)[\s\S]*history\.reset\(\{ nodes: freshNodes, edges: freshEdges, groups: \[\] \}\)/,
+    /function resetCanvasDraft\([\s\S]*templateId\?: string[\s\S]*const freshNodes = seedNodes\(\)[\s\S]*setNodes\(freshNodes\)[\s\S]*setEdges\(freshEdges\)[\s\S]*selection\.reset\(\)[\s\S]*execution\.reset\(\)[\s\S]*history\.reset\(\{ nodes: freshNodes, edges: freshEdges, groups: \[\] \}\)/,
     canvasView,
   ],
   [

@@ -1,41 +1,50 @@
 /* Flux 设计令牌 — 深色优先（见 docs/ui-spec.md §2） */
 :root {
   /* 背景层级 */
-  --bg-base: #0f1114;
-  --bg-surface: #1a1d23;
-  --bg-elevated: #21252d;
-  --bg-inset: #0b0d10;
+  --bg-base: #0b0e13;
+  --bg-surface: #151a22;
+  --bg-elevated: #1b222d;
+  --bg-inset: #0e131a;
+  --bg-hover: #202836;
+  --bg-selected: #18243a;
 
   /* 边框 */
-  --border-subtle: #2a2f38;
-  --border-strong: #3a4150;
+  --border-subtle: #28313e;
+  --border-strong: #3b485c;
 
   /* 文本 */
-  --text-primary: #e8eaed;
-  --text-muted: #8b929a;
-  --text-disabled: #565d66;
-  --text-inverse: #0f1114;
+  --text-primary: #f2f5f9;
+  --text-muted: #9aa5b5;
+  --text-disabled: #647080;
+  --text-inverse: #071018;
 
   /* 强调色 */
-  --accent: #5b8def;
-  --accent-hover: #6f9bf2;
-  --accent-active: #4a79d6;
-  --accent-subtle: rgba(91, 141, 239, 0.12);
+  --accent: #6e96ff;
+  --accent-hover: #86a7ff;
+  --accent-active: #5c82e8;
+  --accent-subtle: rgba(110, 150, 255, 0.14);
+  --accent-glow: rgba(110, 150, 255, 0.2);
+
+  /* 品牌 */
+  --brand-mark-start: #4aa8ff;
+  --brand-mark-end: #9b6bff;
+  --brand-mark-core: var(--text-primary);
 
   /* 状态色 */
-  --success: #4caf82;
-  --warning: #d4a053;
-  --danger: #c75c5c;
-  --info: #5b8def;
-  --success-subtle: rgba(76, 175, 130, 0.14);
-  --warning-subtle: rgba(212, 160, 83, 0.14);
-  --danger-subtle: rgba(199, 92, 92, 0.14);
+  --success: #58c99a;
+  --warning: #e1ad63;
+  /* 危险状态使用琥珀橙，避免在深色界面中形成大面积红色刺激。 */
+  --danger: #f0a35f;
+  --info: #6e96ff;
+  --success-subtle: rgba(88, 201, 154, 0.14);
+  --warning-subtle: rgba(225, 173, 99, 0.14);
+  --danger-subtle: rgba(240, 163, 95, 0.14);
 
   /* 画布 */
-  --canvas-bg: #0f1114;
-  --canvas-dot: rgba(42, 47, 56, 0.5);
-  --canvas-edge: #5b8def;
-  --canvas-edge-hover: #6f9bf2;
+  --canvas-bg: #0b0e13;
+  --canvas-dot: rgba(76, 90, 112, 0.42);
+  --canvas-edge: #6e96ff;
+  --canvas-edge-hover: #86a7ff;
 
   /* 载体类型色 */
   --carrier-app: #5b8def;
@@ -43,7 +52,8 @@
   --carrier-ai: #4caf82;
   --carrier-data: #d4a053;
   --carrier-subflow: #56b6c2;
-  --carrier-trigger: #c75c5c;
+  /* 触发器是普通节点类型，不使用危险语义色。 */
+  --carrier-trigger: #8f82f7;
   --carrier-basic: #8b929a;
 
   /* 字体 */
@@ -73,8 +83,14 @@
   --radius-full: 9999px;
 
   /* 阴影 */
+  --overlay-scrim: rgba(0, 0, 0, 0.48);
+  --shadow-command: 0 18px 54px rgba(0, 0, 0, 0.42);
+  --shadow-card: 0 18px 48px rgba(0, 0, 0, 0.24);
+  --shadow-node: 0 12px 28px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  --shadow-node-hover: 0 16px 34px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.035);
   --shadow-drawer: 0 8px 32px rgba(0, 0, 0, 0.4);
   --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-node-selected: 0 0 0 2px var(--accent);
 
   /* 动效 */
   --motion-fast: 120ms;
@@ -87,6 +103,8 @@
   --z-canvas: 0;
   --z-floating-toolbar: 100;
   --z-drawer: 200;
+  --z-canvas-palette: 250;
+  --z-context-menu: 260;
   --z-topbar: 300;
   --z-command-palette: 400;
   --z-popover: 500;

@@ -24,3 +24,8 @@ export interface AuthTokens {
   /** access token 过期秒数 */
   expiresIn: number;
 }
+
+export interface AuthResult {
+  user: User;
+  tokens: AuthTokens;
+}

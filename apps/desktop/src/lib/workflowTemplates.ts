@@ -5,7 +5,8 @@ export type WorkflowTemplateId =
   | "ai-content-draft"
   | "daily-brief"
   | "priority-router"
-  | "json-formatter";
+  | "json-formatter"
+  | "public-json-formats";
 
 export interface WorkflowTemplateNode {
   key: string;
@@ -355,6 +356,88 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     ],
   },
   {
+    id: "public-json-formats",
+    title: "定时 + 公共 JSON 转 XML / YAML",
+    category: "开发工具",
+    summary: "按计划从 JSONPlaceholder 获取公开 JSON，并行转换为 XML 与 YAML 后分别输出。",
+    outcome: "7 个节点 · 定时触发 / HTTP / XML / YAML / 双输出",
+    accent: "var(--carrier-data)",
+    icon: "branch",
+    nodes: [
+      {
+        key: "schedule",
+        type: "flux.trigger.cron",
+        position: { x: 40, y: 320 },
+        label: "定时获取",
+        config: { enabled: true, cron: "*/15 * * * *", timezone: "Asia/Shanghai" },
+      },
+      {
+        key: "fetch",
+        type: "flux.action.http",
+        position: { x: 390, y: 320 },
+        label: "获取公开 JSON",
+        config: {
+          method: "GET",
+          url: "https://jsonplaceholder.typicode.com/posts/1",
+          headers: {},
+          body: "",
+        },
+      },
+      {
+        key: "parse",
+        type: "flux.transform.json",
+        position: { x: 740, y: 320 },
+        label: "解析 JSON 对象",
+        config: { mode: "parse", path: "body" },
+      },
+      {
+        key: "xml",
+        type: "flux.transform.xml",
+        position: { x: 1090, y: 100 },
+        label: "转换为 XML",
+        config: {
+          direction: "json-to-xml",
+          sourcePath: "",
+          indent: 2,
+          preserveAttributes: true,
+          declaration: true,
+          rootName: "post",
+        },
+      },
+      {
+        key: "yaml",
+        type: "flux.transform.yaml",
+        position: { x: 1090, y: 540 },
+        label: "转换为 YAML",
+        config: {
+          direction: "json-to-yaml",
+          sourcePath: "",
+          indent: 2,
+        },
+      },
+      {
+        key: "xml-output",
+        type: "flux.input.text",
+        position: { x: 1470, y: 100 },
+        label: "XML 输出",
+      },
+      {
+        key: "yaml-output",
+        type: "flux.input.text",
+        position: { x: 1470, y: 540 },
+        label: "YAML 输出",
+      },
+    ],
+    edges: [
+      { source: "schedule", target: "fetch" },
+      { source: "fetch", target: "parse" },
+      { source: "parse", target: "xml" },
+      { source: "parse", target: "yaml" },
+      { source: "xml", target: "xml-output" },
+      { source: "yaml", target: "yaml-output" },
+    ],
+  },
+  {
     id: "ai-content-draft",
     title: "AI 内容起草",
     category: "内容效率",
@@ -422,7 +505,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         type: "flux.trigger.cron",
         position: { x: 40, y: 180 },
         label: "每天 09:00",
-        config: { cron: "0 9 * * *", timezone: "Asia/Shanghai" },
+        config: { enabled: true, cron: "0 9 * * *", timezone: "Asia/Shanghai" },
       },
       {
         key: "fetch",
@@ -532,7 +615,8 @@ export const PUBLIC_WORKFLOW_TEMPLATES: WorkflowTemplate[] =
     (template) =>
       template.id === "customer-lead-processing" ||
       template.id === "support-ticket-triage" ||
-      template.id === "purchase-approval",
+      template.id === "purchase-approval" ||
+      template.id === "public-json-formats",
   );
 
 export function getWorkflowTemplate(

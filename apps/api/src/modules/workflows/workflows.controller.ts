@@ -1,39 +1,101 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
-import { safeParseGraph } from "@flux/workflow-schema";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
+import { CurrentUser } from "../auth/decorators/current-user.decorator";
+import {
+  AuthenticatedUser,
+  JwtAuthGuard,
+} from "../auth/guards/jwt-auth.guard";
+import {
+  WorkflowsService,
+} from "./workflows.service";
+import {
+  CreateWorkflowDto,
+  ToggleFavoriteDto,
+  UpdateWorkflowDto,
+} from "./dto/workflow.dto";
 
-/** 工作流 CRUD + 发布占位（内存实现，后续接 PostgreSQL） */
+@UseGuards(JwtAuthGuard)
 @Controller("workflows")
 export class WorkflowsController {
-  private readonly store = new Map<string, unknown>();
+  constructor(private readonly workflows: WorkflowsService) {}
 
   @Get()
-  list() {
-    return [...this.store.values()];
+  list(@CurrentUser() user: AuthenticatedUser) {
+    return this.workflows.listByOwner(user.id);
+  }
+
+  @Get("published")
+  listPublished(@CurrentUser() user: AuthenticatedUser) {
+    return this.workflows.listPublished(user.id);
+  }
+
+  @Get(":id")
+  get(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    return this.workflows.getOwned(user.id, id);
   }
 
   @Post()
-  create(@Body() body: unknown) {
-    const parsed = safeParseGraph(body);
-    if (!parsed.success) {
-      return { ok: false, errors: parsed.error.issues };
-    }
-    this.store.set(parsed.data.id, parsed.data);
-    return { ok: true, data: parsed.data };
+  create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: CreateWorkflowDto,
+  ) {
+    return this.workflows.create(user.id, body);
   }
 
   @Patch(":id")
-  update(@Param("id") id: string, @Body() body: unknown) {
-    const parsed = safeParseGraph(body);
-    if (!parsed.success) {
-      return { ok: false, errors: parsed.error.issues };
-    }
-    const next = { ...parsed.data, version: parsed.data.version + 1 };
-    this.store.set(id, next);
-    return { ok: true, data: next };
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() body: UpdateWorkflowDto,
+  ) {
+    return this.workflows.update(user.id, id, body);
   }
 
   @Post(":id/publish")
-  publish(@Param("id") id: string) {
-    return { ok: true, id, status: "published" };
+  publish(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    return this.workflows.publish(user.id, id);
+  }
+
+  @Get(":id/share")
+  getShare(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    return this.workflows.getShare(user.id, id);
+  }
+
+  @Post(":id/share")
+  enableShare(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+  ) {
+    return this.workflows.enableShare(user.id, id);
+  }
+
+  @Delete(":id/share")
+  disableShare(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+  ) {
+    return this.workflows.disableShare(user.id, id);
+  }
+
+  @Post(":id/favorite")
+  favorite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() body: ToggleFavoriteDto,
+  ) {
+    return this.workflows.toggleFavorite(user.id, id, body.isFavorite);
+  }
+
+  @Delete(":id")
+  remove(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    return this.workflows.remove(user.id, id);
   }
 }

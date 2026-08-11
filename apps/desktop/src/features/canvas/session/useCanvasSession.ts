@@ -14,6 +14,10 @@ import {
   WorkflowVersionConflictError,
 } from "../../workspace/application/workspaceRepositoryPort.js";
 import { createWorkflowSessionService } from "../../workspace/application/workflowSessionService.js";
+import {
+  createCanvasSaveCoordinator,
+  type CanvasSaveOperation,
+} from "./canvasSaveCoordinator.js";
 
 const FORCE_AUTOSAVE_SIGNATURE = "__force_autosave__";
 
@@ -62,6 +66,9 @@ export function useCanvasSession({
   const signatureRef = useRef(signature);
   const wasActiveRef = useRef(active);
   const sessionRequestVersionRef = useRef(0);
+  const saveCoordinatorRef = useRef(
+    createCanvasSaveCoordinator<WorkflowRecord>(),
+  );
   signatureRef.current = signature;
 
   const acceptRecord = useCallback(
@@ -84,37 +91,47 @@ export function useCanvasSession({
       requestedSignature: string,
       operation: "save" | "publish",
     ): Promise<WorkflowRecord | null> => {
-      const store = useCanvasStore.getState();
-      store.setStatus("saving");
-      try {
-        const request = {
-          workflowId: store.workflowId,
-          version: store.version,
-          title: store.title,
-          graph: createGraph(),
-        };
-        const record = operation === "publish"
-          ? await session.publish(request)
-          : await session.save(request);
-        lastSignatureRef.current = requestedSignature;
-        useCanvasStore.getState().applyRecord(record);
-        return record;
-      } catch (error) {
-        if (error instanceof WorkflowVersionConflictError) {
-          setConflict({
-            localVersion: useCanvasStore.getState().version,
-            remoteVersion: error.currentVersion,
-          });
-        }
-        const message = error instanceof WorkflowVersionConflictError
-          ? "版本冲突，请选择保留本地或使用云端"
-          : formatProductErrorMessage(
-              error,
-              operation === "publish" ? "发布失败" : "保存失败",
-            );
-        useCanvasStore.getState().setStatus("error", message);
-        return null;
-      }
+      return saveCoordinatorRef.current.enqueue({
+        signature: requestedSignature,
+        operation,
+        onStart() {
+          useCanvasStore.getState().setStatus("saving");
+        },
+        async execute(queuedOperation: CanvasSaveOperation) {
+          // Capture persistence metadata only when this serialized write starts.
+          // A preceding create can therefore supply the id/version to this write.
+          const store = useCanvasStore.getState();
+          const request = {
+            workflowId: store.workflowId,
+            version: store.version,
+            title: store.title,
+            graph: createGraph(),
+          };
+          return queuedOperation === "publish"
+            ? session.publish(request)
+            : session.save(request);
+        },
+        onSuccess(record, committedSignature) {
+          const preserveLocalDraft = signatureRef.current !== committedSignature;
+          lastSignatureRef.current = committedSignature;
+          useCanvasStore.getState().applyRecord(record, preserveLocalDraft);
+        },
+        onError(error, failedOperation) {
+          if (error instanceof WorkflowVersionConflictError) {
+            setConflict({
+              localVersion: useCanvasStore.getState().version,
+              remoteVersion: error.currentVersion,
+            });
+          }
+          const message = error instanceof WorkflowVersionConflictError
+            ? "版本冲突，请选择保留本地或使用云端"
+            : formatProductErrorMessage(
+                error,
+                failedOperation === "publish" ? "发布失败" : "保存失败",
+              );
+          useCanvasStore.getState().setStatus("error", message);
+        },
+      });
     },
     [createGraph, session],
   );
@@ -167,6 +184,7 @@ export function useCanvasSession({
 
   const openWorkflow = useCallback(async (workflowId: string) => {
     const requestVersion = ++sessionRequestVersionRef.current;
+    saveCoordinatorRef.current.invalidate();
     cancelAutosave();
     setConflict(null);
     readyRef.current = false;
@@ -189,6 +207,7 @@ export function useCanvasSession({
 
   const createDraft = useCallback(async (input: CreateWorkflowDraftInput) => {
     sessionRequestVersionRef.current += 1;
+    saveCoordinatorRef.current.invalidate();
     cancelAutosave();
     setConflict(null);
     useCanvasStore.getState().startDraft(input.title);
@@ -211,9 +230,12 @@ export function useCanvasSession({
     const wasActive = wasActiveRef.current;
     wasActiveRef.current = active;
     if (!wasActive || active || !readyRef.current) return;
-    if (useCanvasStore.getState().status === "saving") return;
     if (signatureRef.current !== lastSignatureRef.current) void saveNow();
   }, [active, saveNow]);
+
+  useEffect(() => () => {
+    saveCoordinatorRef.current.invalidate();
+  }, [session]);
 
   const keepLocalVersion = useCallback(async () => {
     if (!conflict) return;
@@ -224,6 +246,8 @@ export function useCanvasSession({
 
   const useStoredVersion = useCallback(async () => {
     const requestVersion = ++sessionRequestVersionRef.current;
+    saveCoordinatorRef.current.invalidate();
+    cancelAutosave();
     setConflict(null);
     const workflowId = useCanvasStore.getState().workflowId;
     if (!workflowId) return;
@@ -240,7 +264,7 @@ export function useCanvasSession({
           formatProductErrorMessage(error, "重新加载工作流失败"),
         );
     }
-  }, [acceptRecord, session]);
+  }, [acceptRecord, cancelAutosave, session]);
 
   return {
     conflict,

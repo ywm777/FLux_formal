@@ -20,8 +20,8 @@ const requirements = [
     titleBar,
   ],
   [
-    "canvas-mode command palette exposes concrete ability commands",
-    /mode === "canvas"[\s\S]*\.\.\.catalogNodes\.map\(\(def\): CommandItem => \(\{[\s\S]*id:\s*`node:\$\{def\.id\}`[\s\S]*label:\s*def\.name[\s\S]*group:\s*"能力"[\s\S]*keywords:\s*\[def\.id,\s*def\.category,\s*def\.carrier\]/,
+    "canvas-mode command palette exposes builtin and active personal node commands",
+    /mode === "canvas"[\s\S]*catalogNodes[\s\S]*customNodeDefinitions[\s\S]*\.map\(\(def\): CommandItem => \(\{[\s\S]*id:\s*`node:\$\{def\.id\}`[\s\S]*label:\s*def\.name[\s\S]*group:\s*def\.id\.startsWith\("custom\."\) \? "我的节点" : "能力"/,
     titleBar,
   ],
   [

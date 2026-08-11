@@ -15,6 +15,20 @@ export class NodeRegistry {
     for (const def of defs) this.register(def);
   }
 
+  /**
+   * 注册或替换同一类型的定义。
+   *
+   * 内置节点仍使用 register 的严格重复保护；只有用户节点的版本激活流程
+   * 使用 upsert，让稳定 type id 可以指向新的已验证版本。
+   */
+  upsert(def: NodeDefinition): void {
+    this.defs.set(def.id, def);
+  }
+
+  unregister(type: string): boolean {
+    return this.defs.delete(type);
+  }
+
   resolve(type: string): NodeDefinition | undefined {
     return this.defs.get(type);
   }

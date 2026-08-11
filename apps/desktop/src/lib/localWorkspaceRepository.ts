@@ -106,6 +106,15 @@ export const localWorkspaceRepository = {
     return snapshot.workflows.map(toSummary);
   },
 
+  /** 调度/索引等批处理只读取并解析一次快照，避免 list + N 次 get。 */
+  async listRecords(): Promise<WorkflowRecord[]> {
+    const snapshot = await readSnapshot();
+    return snapshot.workflows.map((record) => ({
+      ...structuredClone(record),
+      graph: parseGraph(record.graph),
+    }));
+  },
+
   async get(id: string): Promise<WorkflowRecord> {
     const snapshot = await readSnapshot();
     return structuredClone(requireRecord(snapshot, id));

@@ -1,5 +1,7 @@
 import type { WorkflowRecord, WorkflowSummary } from "@flux/shared";
 
+export type WorkspaceKind = "local" | "cloud";
+
 export interface SaveWorkflowPatch {
   title?: string;
   tags?: string[];

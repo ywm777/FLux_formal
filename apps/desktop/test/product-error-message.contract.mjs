@@ -17,7 +17,10 @@ const authStore = read("src/store/authStore.ts");
 const tasksStore = read("src/store/tasksStore.ts");
 const canvasView = read("src/features/canvas/CanvasView.tsx");
 const canvasSession = read("src/features/canvas/session/useCanvasSession.ts");
-const canvasErrorSources = `${canvasSession}\n${canvasView}`;
+const canvasExecutionController = read(
+  "src/features/canvas/execution/canvasExecutionController.ts",
+);
+const canvasErrorSources = `${canvasSession}\n${canvasView}\n${canvasExecutionController}`;
 
 const requirements = [
   [
@@ -40,7 +43,8 @@ const requirements = [
     (source) => [
       /formatProductErrorMessage\(error,\s*"打开工作流失败"\)/,
       /operation === "publish" \? "发布失败" : "保存失败"/,
-      /formatProductErrorMessage\(err,\s*"执行工作流失败"\)/,
+      /formatError:\s*formatProductErrorMessage/,
+      /formatProductErrorMessage\(err,\s*"发布失败"\)/,
     ].every((pattern) => pattern.test(source)),
     canvasErrorSources,
   ],

@@ -4,12 +4,15 @@ import {
   ConflictException,
   NotFoundException,
 } from "@nestjs/common";
-import type { WorkflowGraph } from "@flux/workflow-schema";
+import {
+  CURRENT_WORKFLOW_SCHEMA_VERSION,
+  type WorkflowGraph,
+} from "@flux/workflow-schema";
 import { InMemoryExecutionsRepository } from "../../database/memory/in-memory-executions.repository";
 import { InMemoryWorkflowsRepository } from "../../database/memory/in-memory-workflows.repository";
 import { CancelRegistry } from "./cancel-registry.service";
 import type { ExecutionJob } from "./execution-processor.service";
-import { ExecutionQueue } from "./execution-queue";
+import { ExecutionQueue, InMemoryExecutionQueue } from "./execution-queue";
 import { ExecutionsService } from "./executions.service";
 
 class CapturingQueue extends ExecutionQueue {
@@ -21,7 +24,7 @@ class CapturingQueue extends ExecutionQueue {
 }
 
 const validGraph: WorkflowGraph = {
-  schemaVersion: 1,
+  schemaVersion: CURRENT_WORKFLOW_SCHEMA_VERSION,
   id: "graph-valid",
   version: 1,
   viewport: { x: 0, y: 0, zoom: 1 },
@@ -44,7 +47,7 @@ const validGraph: WorkflowGraph = {
 };
 
 const approvalGraph: WorkflowGraph = {
-  schemaVersion: 1,
+  schemaVersion: CURRENT_WORKFLOW_SCHEMA_VERSION,
   id: "graph-approval",
   version: 1,
   viewport: { x: 0, y: 0, zoom: 1 },
@@ -80,7 +83,7 @@ const approvalGraph: WorkflowGraph = {
 };
 
 const runtimeInputGraph: WorkflowGraph = {
-  schemaVersion: 1,
+  schemaVersion: CURRENT_WORKFLOW_SCHEMA_VERSION,
   id: "graph-runtime-input",
   version: 1,
   viewport: { x: 0, y: 0, zoom: 1 },
@@ -103,7 +106,7 @@ const runtimeInputGraph: WorkflowGraph = {
 };
 
 const connectedRuntimeInputGraph: WorkflowGraph = {
-  schemaVersion: 1,
+  schemaVersion: CURRENT_WORKFLOW_SCHEMA_VERSION,
   id: "graph-connected-runtime-input",
   version: 1,
   viewport: { x: 0, y: 0, zoom: 1 },
@@ -169,7 +172,42 @@ async function main(): Promise<void> {
   const draftTest = await service.startDraft("owner-a", draft.id);
   assert.equal(draftTest.status, "running");
   assert.equal(queue.jobs.length, 1);
-  assert.deepEqual(queue.jobs[0]?.graph, validGraph);
+  assert.deepEqual(
+    (await executions.getResumeState(draftTest.executionId))?.graphSnapshot,
+    validGraph,
+  );
+  queue.jobs.length = 0;
+
+  const pausedRemotely = await service.cancel(
+    "owner-a",
+    draftTest.executionId,
+    "pause",
+  );
+  assert.equal(pausedRemotely.cancelled, true);
+  await assert.rejects(
+    () => service.cancel("owner-a", draftTest.executionId, "invalid" as "pause"),
+    BadRequestException,
+  );
+  assert.equal(
+    (await executions.getControlRequest(draftTest.executionId))?.mode,
+    "pause",
+    "cancel intent must be durable even when this API process owns no controller",
+  );
+  await executions.markStatus(draftTest.executionId, "paused");
+  await executions.saveCheckpoint(draftTest.executionId, {
+    graphId: validGraph.id,
+    graphVersion: validGraph.version,
+    completedRuns: [],
+    producedPorts: [],
+  });
+  const resumedControlPause = await service.resume("owner-a", draftTest.executionId);
+  assert.equal(resumedControlPause.status, "running");
+  assert.equal(await executions.getControlRequest(draftTest.executionId), null);
+  assert.ok(queue.jobs[0]?.resumeId, "generic resume must use a distinct queue phase id");
+  await assert.rejects(
+    () => service.resume("owner-a", draftTest.executionId),
+    ConflictException,
+  );
   queue.jobs.length = 0;
 
   const approval = await workflows.create({
@@ -182,6 +220,17 @@ async function main(): Promise<void> {
   assert.equal(queue.jobs.length, 1);
   queue.jobs.length = 0;
   await executions.markStatus(approvalRun.executionId, "paused");
+  await executions.saveCheckpoint(approvalRun.executionId, {
+    graphId: approvalGraph.id,
+    graphVersion: approvalGraph.version,
+    completedRuns: [],
+    producedPorts: [],
+    pausedNodeId: "review",
+  });
+  await workflows.update(approval.id, {
+    graph: { ...validGraph, id: approvalGraph.id },
+    expectedVersion: approval.version,
+  });
   const continued = await service.approve("owner-a", approvalRun.executionId, {
     nodeId: "review",
     decision: "approved",
@@ -189,8 +238,25 @@ async function main(): Promise<void> {
   assert.equal(continued.status, "running");
   assert.equal(queue.jobs.length, 1);
   assert.equal(queue.jobs[0]?.executionId, approvalRun.executionId);
-  const continuedGraph = queue.jobs[0]?.graph as WorkflowGraph;
-  assert.equal(continuedGraph.nodes[0]?.data.decision, "approved");
+  assert.deepEqual(queue.jobs[0]?.approval, {
+    nodeId: "review",
+    decision: "approved",
+    reviewer: undefined,
+    note: undefined,
+  });
+  assert.deepEqual(
+    (await executions.getResumeState(approvalRun.executionId))?.graphSnapshot,
+    approvalGraph,
+    "approval must retain the graph captured when execution was created",
+  );
+  await assert.rejects(
+    () => service.approve("owner-a", approvalRun.executionId, {
+      nodeId: "review",
+      decision: "approved",
+    }),
+    ConflictException,
+  );
+  assert.equal(queue.jobs.length, 1, "a repeated approval must not enqueue twice");
   queue.jobs.length = 0;
 
   const malformed = await workflows.create({
@@ -203,6 +269,23 @@ async function main(): Promise<void> {
   await assert.rejects(
     () => service.start("owner-a", malformed.id),
     BadRequestException,
+  );
+
+  const unsupported = await workflows.create({
+    ownerId: "owner-a",
+    workspaceId: "default",
+    title: "Desktop custom node",
+    graph: {
+      ...validGraph,
+      id: "graph-unsupported",
+      nodes: [{ ...validGraph.nodes[0]!, type: "local.custom.only" }],
+    },
+  });
+  await assert.rejects(
+    () => service.startDraft("owner-a", unsupported.id),
+    (error: unknown) =>
+      error instanceof BadRequestException &&
+      (error.getResponse() as { code?: string }).code === "UNSUPPORTED_CLOUD_NODE",
   );
 
   const dangling = await workflows.create({
@@ -267,7 +350,8 @@ async function main(): Promise<void> {
   });
   assert.equal(runtimeRun.status, "running");
   assert.equal(
-    (queue.jobs[0]?.graph as WorkflowGraph).nodes[0]?.data.text,
+    ((await executions.getResumeState(runtimeRun.executionId))?.graphSnapshot as WorkflowGraph)
+      .nodes[0]?.data.text,
     '{"name":"Flux"}',
   );
   assert.equal(
@@ -285,7 +369,8 @@ async function main(): Promise<void> {
   const connectedRun = await service.startDraft("owner-a", connectedRuntimeInput.id);
   assert.equal(connectedRun.status, "running");
   assert.equal(
-    (queue.jobs[0]?.graph as WorkflowGraph).nodes.find((node) => node.id === "relay")?.data.text,
+    ((await executions.getResumeState(connectedRun.executionId))?.graphSnapshot as WorkflowGraph)
+      .nodes.find((node) => node.id === "relay")?.data.text,
     "",
   );
   queue.jobs.length = 0;
@@ -303,7 +388,48 @@ async function main(): Promise<void> {
 
   assert.equal(result.status, "running");
   assert.equal(queue.jobs.length, 1);
-  assert.deepEqual(queue.jobs[0]?.graph, validGraph);
+  assert.deepEqual(
+    (await executions.getResumeState(result.executionId))?.graphSnapshot,
+    validGraph,
+  );
+
+  const boundedExecutions = new InMemoryExecutionsRepository();
+  const boundedWorkflows = new InMemoryWorkflowsRepository();
+  let releaseFirst: (() => void) | undefined;
+  const boundedQueue = new InMemoryExecutionQueue(
+    {
+      async process() {
+        await new Promise<void>((resolve) => { releaseFirst = resolve; });
+      },
+    },
+    { concurrency: 1, capacity: 1 },
+  );
+  const boundedService = new ExecutionsService(
+    boundedExecutions,
+    boundedWorkflows,
+    boundedQueue,
+    new CancelRegistry(),
+  );
+  const boundedWorkflow = await boundedWorkflows.create({
+    ownerId: "owner-bounded",
+    workspaceId: "default",
+    title: "Bounded",
+    graph: validGraph,
+  });
+  await boundedService.startDraft("owner-bounded", boundedWorkflow.id);
+  await assert.rejects(
+    () => boundedService.startDraft("owner-bounded", boundedWorkflow.id),
+    /执行队列已满/,
+  );
+  const boundedRuns = await boundedExecutions.listByOwner("owner-bounded");
+  assert.equal(boundedRuns.length, 2);
+  const rejectedRun = boundedRuns.find((run) => run.status === "failed");
+  assert.ok(rejectedRun, "queue rejection must finalize the created execution");
+  assert.match(
+    (await boundedExecutions.findById(rejectedRun.id))?.error ?? "",
+    /执行队列已满/,
+  );
+  releaseFirst?.();
   console.log("executions service smoke passed");
 }
 

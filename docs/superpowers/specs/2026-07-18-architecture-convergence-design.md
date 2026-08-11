@@ -295,3 +295,40 @@ Database、Redis、Memory、File、AI Adapters
 - **本地与云端产生偏差**：通过统一端口与合同测试约束两类适配器。
 - **迁移损坏用户数据**：原始数据备份、目标校验、原子写入和失败回退缺一不可。
 - **目录变整齐但复杂度未下降**：验收以调用路径、依赖方向和可测试性为准，而非文件数量。
+
+## 16. 阶段 5 实施证据（底座稳定性与转场动效）
+
+完成日期：2026-07-20。
+
+本阶段先处理基础设施边界和页面切换体验，未改变工作流编辑、执行和分享的用户流程。
+
+### 已落地
+
+- `WorkflowsController` 与 `ExecutionsController` 的请求体改为 `class-validator` DTO；未知字段由全局 `ValidationPipe` 清理，工作流图仍由 Schema 在应用服务层校验。
+- 根构建脚本拆分为 `build:packages` 与 `build:apps`。完整性测试现在同时验证 packages、API 和 Desktop 构建，并执行 DTO smoke 与 Controller 边界合同。
+- Workspace Repository 改为 `createWorkspaceRepository(kind)` 工厂，组合根按当前空间创建固定适配器实例；任务列表操作使用显式 scope，不再在每个请求中读取全局 Store 决定目标。
+- 工作台与画布保持双层挂载，通过 `.app-view-layer` 使用 `opacity + translate3d` 进行 200ms 进入、160ms 退出的合成层过渡；活动层立即可交互，非活动层禁用指针事件，并支持 `prefers-reduced-motion`。
+
+### 验证证据
+
+```text
+pnpm --filter @flux/api typecheck
+pnpm --filter @flux/api build
+pnpm --filter @flux/api test:dto
+  PASS
+
+pnpm --filter @flux/desktop typecheck
+pnpm --filter @flux/desktop build
+node apps/desktop/test/view-transition.contract.mjs
+node apps/desktop/test/workspace-service-provider.contract.mjs
+  PASS
+
+apps/desktop/test/*.contract.mjs
+  PASS
+
+pnpm exec playwright test -c e2e/playwright.config.ts \
+  e2e/view-switch-continuity.spec.ts --workers=1
+  1 passed, 0 failed
+```
+
+动效采用统一的 150–300ms 交互节奏，仅动画 `opacity` 与 `transform`，不阻塞点击或键盘输入。下一批继续处理本地存储原子写入/备份与执行审批 checkpoint；大组件拆分仍按风险独立推进。

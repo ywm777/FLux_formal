@@ -8,15 +8,21 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "pnpm -r --filter \"./packages/*\" run build",
+    "build": "pnpm run build:packages",
+    "build:packages": "pnpm -r --filter \"./packages/*\" run build",
+    "build:apps": "pnpm run build:packages && pnpm --filter @flux/api build && pnpm --filter @flux/desktop build",
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint",
     "clean": "pnpm -r run clean",
     "dev:desktop": "pnpm --filter @flux/desktop run dev",
     "dev:api": "pnpm --filter @flux/api run dev",
-    "test:architecture": "node test/architecture-boundaries.contract.mjs"
+    "test:architecture": "node test/architecture-boundaries.contract.mjs",
+    "test:ci": "pnpm test:architecture && pnpm --filter @flux/workflow-runtime test:unit && pnpm --filter @flux/api test:core && pnpm --filter @flux/desktop test:unit && pnpm --filter @flux/desktop build && cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml",
+    "test:integrity": "pnpm test:architecture && pnpm run build:apps && pnpm --filter @flux/workflow-runtime test:unit && pnpm --filter @flux/api test:dto && node packages/node-sdk/dist/custom-node-rules.smoke.js && node packages/node-sdk/dist/builtin/expression.smoke.js && node packages/node-sdk/dist/builtin/expanded-nodes.smoke.js && node apps/api/dist/modules/auth/auth-runtime-config.smoke.js && node apps/api/dist/modules/auth/auth.smoke.js && node apps/api/dist/modules/executions/execution-queue.smoke.js && node apps/api/dist/modules/executions/execution-resume.smoke.js && node apps/api/dist/modules/executions/node-scenarios.smoke.js && node apps/api/dist/database/database.smoke.js && node apps/api/dist/modules/workflows/workflows.service.smoke.js && node apps/api/dist/modules/executions/executions.service.smoke.js && pnpm --filter @flux/desktop test:unit && node apps/desktop/test/account-management.contract.mjs && node apps/desktop/test/workflow-sharing.contract.mjs && node apps/desktop/test/local-first-workspace.contract.mjs && node apps/desktop/test/view-transition.contract.mjs && node apps/desktop/test/workspace-service-provider.contract.mjs && node apps/desktop/test/custom-node-studio.contract.mjs && pnpm exec playwright test -c e2e/playwright.config.ts e2e/conflict-contract.spec.ts e2e/local-new-workflow.spec.ts e2e/view-switch-continuity.spec.ts",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "typescript": "^5.5.4"
   }
 }

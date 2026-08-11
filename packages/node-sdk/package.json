@@ -13,14 +13,18 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@flux/shared": "workspace:*"
+    "@flux/shared": "workspace:*",
+    "fast-xml-parser": "^5.10.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "rimraf": "^6.0.1",

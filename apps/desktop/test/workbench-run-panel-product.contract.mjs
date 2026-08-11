@@ -20,6 +20,10 @@ const fluxNode = readFileSync(
   resolve(root, "src/features/canvas/FluxNode.tsx"),
   "utf8",
 );
+const executionController = readFileSync(
+  resolve(root, "src/features/canvas/execution/canvasExecutionController.ts"),
+  "utf8",
+);
 
 const requirements = [
   [
@@ -44,8 +48,8 @@ const requirements = [
   ],
   [
     "execution progress is projected onto canvas nodes",
-    /const executeDraftRun = useCallback[\s\S]*applyNodeRunState\(detail\.runs\)/,
-    canvasView,
+    /onProgress\?: ExecutionProgressHandler[\s\S]*this\.ports\.applyNodeRuns\(detail\.runs\)/,
+    executionController,
   ],
 ];
 

@@ -75,11 +75,72 @@ for (const file of sourceFiles(resolve(root, "apps/desktop/src/features"))) {
     if (
       specifier.includes("/lib/") ||
       specifier.includes("/infrastructure/") ||
+      specifier.includes("/store/") ||
       frameworkDependencies.some((dependency) =>
         specifier === dependency || specifier.startsWith(dependency)
       )
     ) {
       report(file, `application layer imports concrete dependency: ${specifier}`);
+    }
+  }
+}
+
+for (const file of sourceFiles(resolve(root, "apps/desktop/src/lib"))) {
+  if (!/[\\/]\w+Core\.ts$/.test(file)) continue;
+  const source = readFileSync(file, "utf8");
+  for (const specifier of importsOf(source)) {
+    if (specifier.includes("/store/")) {
+      report(file, `core module imports UI state store: ${specifier}`);
+    }
+  }
+}
+
+for (const file of sourceFiles(resolve(root, "apps/api/src/modules"))) {
+  const normalized = file.replaceAll("\\", "/");
+  if (/\.(?:smoke|demo)\.ts$/.test(normalized)) continue;
+  const source = readFileSync(file, "utf8");
+  for (const specifier of importsOf(source)) {
+    if (/database\/(?:file|typeorm|memory|entities)(?:\/|$)/.test(specifier)) {
+      report(file, `API application module imports concrete persistence: ${specifier}`);
+    }
+    if (
+      normalized.endsWith(".controller.ts") &&
+      (specifier.includes("/database/") ||
+        specifier.includes("execution-queue") ||
+        specifier === "typeorm" ||
+        specifier === "bullmq")
+    ) {
+      report(file, `API controller bypasses application service: ${specifier}`);
+    }
+  }
+}
+
+for (const file of sourceFiles(resolve(root, "apps/api/src/database"))) {
+  const source = readFileSync(file, "utf8");
+  for (const specifier of importsOf(source)) {
+    if (specifier.includes("modules/")) {
+      report(file, `persistence adapter imports feature module: ${specifier}`);
+    }
+  }
+}
+
+// Two built-ins still carry legacy direct fetch implementations. Keep that debt
+// explicit while preventing additional domain/runtime files from bypassing the
+// capability gateway.
+const legacyNetworkGlobalAllowlist = new Set([
+  "packages/node-sdk/src/builtin/index.ts",
+  "packages/node-sdk/src/builtin/integrations.ts",
+]);
+for (const directory of [
+  resolve(root, "packages/node-sdk/src"),
+  resolve(root, "packages/workflow-runtime/src"),
+]) {
+  for (const file of sourceFiles(directory)) {
+    const path = relative(root, file).replaceAll("\\", "/");
+    if (/\.(?:smoke|test)\.[cm]?[jt]sx?$/.test(path)) continue;
+    if (legacyNetworkGlobalAllowlist.has(path)) continue;
+    if (/\b(?:fetch|XMLHttpRequest|WebSocket)\s*\(/.test(readFileSync(file, "utf8"))) {
+      report(file, "domain/runtime code bypasses the capability gateway");
     }
   }
 }

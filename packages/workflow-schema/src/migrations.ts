@@ -23,6 +23,36 @@ const MIGRATIONS = new Map<number, WorkflowMigration>([
       schemaVersion: 1,
     }),
   ],
+  [
+    1,
+    (document) => ({
+      ...document,
+      schemaVersion: 2,
+      nodes: Array.isArray(document.nodes)
+        ? document.nodes.map((node) => {
+            if (!isDocument(node) || !isDocument(node.ports)) return node;
+            const ports = node.ports;
+            return {
+              ...node,
+              ports: {
+                ...ports,
+                inputs: Array.isArray(ports.inputs)
+                  ? ports.inputs.map((port) => isDocument(port)
+                      ? { ...port, capacity: port.capacity === "many" ? "many" : "one" }
+                      : port)
+                  : ports.inputs,
+                // v1 没有编辑入口来声明“单下游”，历史 one 都来自错误默认值。
+                outputs: Array.isArray(ports.outputs)
+                  ? ports.outputs.map((port) => isDocument(port)
+                      ? { ...port, capacity: "many" }
+                      : port)
+                  : ports.outputs,
+              },
+            };
+          })
+        : document.nodes,
+    }),
+  ],
 ]);
 
 function isDocument(input: unknown): input is WorkflowDocument {

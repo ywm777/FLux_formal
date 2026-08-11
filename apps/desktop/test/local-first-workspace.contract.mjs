@@ -58,7 +58,7 @@ const requirements = [
   ],
   [
     "workflow CRUD is routed through one workspace repository",
-    /isLocal\(\)[\s\S]*localWorkspaceRepository\.list[\s\S]*cloudWorkflowApi\.list[\s\S]*localWorkspaceRepository\.update[\s\S]*cloudWorkflowApi\.update/,
+    /export function createWorkspaceRepository\(\s*kind: WorkspaceKind,[\s\S]*const local = kind === "local"[\s\S]*local \? localWorkspaceRepository\.list\(\) : cloudWorkflowApi\.list\(\)[\s\S]*localWorkspaceRepository\.update\(id, patch\)[\s\S]*cloudWorkflowApi\.update\(id, patch\)/,
     repository,
   ],
   [

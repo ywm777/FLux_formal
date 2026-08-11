@@ -1,9 +1,10 @@
 import {
   createContext,
+  useMemo,
   useContext,
   type PropsWithChildren,
 } from "react";
-import { workspaceRepository } from "../lib/workspaceRepository.js";
+import { createWorkspaceRepository } from "../lib/workspaceRepository.js";
 import { browserWorkflowFileAdapter } from "../infrastructure/browser/workflowFileAdapter.js";
 import { cloudWorkflowSharingAdapter } from "../infrastructure/cloud/cloudWorkflowSharingAdapter.js";
 import {
@@ -15,22 +16,31 @@ import {
   type WorkbenchService,
 } from "../features/workbench/application/workbenchService.js";
 import type { WorkspaceRepositoryPort } from "../features/workspace/application/workspaceRepositoryPort.js";
+import { useWorkspaceStore } from "../store/workspaceStore.js";
 
-const WorkspaceServiceContext =
-  createContext<WorkspaceRepositoryPort | null>(null);
+const WorkspaceServiceContext = createContext<WorkspaceRepositoryPort | null>(null);
 const WorkbenchServiceContext = createContext<WorkbenchService | null>(null);
 const SharingServiceContext = createContext<SharingService | null>(null);
-const workbenchService = createWorkbenchService(
-  workspaceRepository,
-  browserWorkflowFileAdapter,
-);
-const sharingService = createSharingService(
-  workspaceRepository,
-  browserWorkflowFileAdapter,
-  cloudWorkflowSharingAdapter,
-);
 
 export function WorkspaceServiceProvider({ children }: PropsWithChildren) {
+  const workspaceKind = useWorkspaceStore((state) => state.kind);
+  const workspaceRepository = useMemo(
+    () => createWorkspaceRepository(workspaceKind),
+    [workspaceKind],
+  );
+  const workbenchService = useMemo(
+    () => createWorkbenchService(workspaceRepository, browserWorkflowFileAdapter),
+    [workspaceRepository],
+  );
+  const sharingService = useMemo(
+    () => createSharingService(
+      workspaceRepository,
+      browserWorkflowFileAdapter,
+      cloudWorkflowSharingAdapter,
+    ),
+    [workspaceRepository],
+  );
+
   return (
     <WorkspaceServiceContext.Provider value={workspaceRepository}>
       <WorkbenchServiceContext.Provider value={workbenchService}>

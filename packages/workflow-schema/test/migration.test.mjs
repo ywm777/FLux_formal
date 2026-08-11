@@ -18,7 +18,7 @@ function legacyGraph() {
         position: { x: 40, y: 80 },
         data: { text: "hello" },
         ports: {
-          inputs: [],
+          inputs: [{ id: "in", name: "上游", dataType: "string" }],
           outputs: [{ id: "out", name: "文本", dataType: "string" }],
         },
       },
@@ -38,6 +38,30 @@ test("unversioned workflow graphs migrate to the current schema without mutation
   assert.equal(migrated.version, 7, "graph revision must remain independent");
   assert.deepEqual(source, before);
   assert.equal("schemaVersion" in source, false);
+  assert.equal(migrated.nodes[0].ports.inputs[0].capacity, "one");
+  assert.equal(migrated.nodes[0].ports.outputs[0].capacity, "many");
+});
+
+test("v1 output cardinality migrates from the legacy single-edge default to fan-out", () => {
+  const source = {
+    ...legacyGraph(),
+    schemaVersion: 1,
+    nodes: legacyGraph().nodes.map((node) => ({
+      ...node,
+      ports: {
+        inputs: node.ports.inputs.map((port) => ({ ...port, capacity: "one" })),
+        outputs: node.ports.outputs.map((port) => ({ ...port, capacity: "one" })),
+      },
+    })),
+  };
+  const before = structuredClone(source);
+
+  const migrated = parseGraph(source);
+
+  assert.equal(migrated.schemaVersion, CURRENT_WORKFLOW_SCHEMA_VERSION);
+  assert.equal(migrated.nodes[0].ports.inputs[0].capacity, "one");
+  assert.equal(migrated.nodes[0].ports.outputs[0].capacity, "many");
+  assert.deepEqual(source, before);
 });
 
 test("parsing a current graph is idempotent", () => {

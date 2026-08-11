@@ -13,6 +13,7 @@ export const EXECUTION_STATUS = {
   SUCCESS: "success",
   FAILED: "failed",
   PAUSED: "paused",
+  CANCELLED: "cancelled",
 } as const;
 export type ExecutionStatus =
   (typeof EXECUTION_STATUS)[keyof typeof EXECUTION_STATUS];

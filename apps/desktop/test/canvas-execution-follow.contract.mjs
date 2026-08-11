@@ -23,6 +23,14 @@ const fluxNode = readFileSync(
   resolve(root, "src/features/canvas/FluxNode.tsx"),
   "utf8",
 );
+const executionModel = readFileSync(
+  resolve(root, "src/features/canvas/execution/canvasExecution.ts"),
+  "utf8",
+);
+const executionController = readFileSync(
+  resolve(root, "src/features/canvas/execution/canvasExecutionController.ts"),
+  "utf8",
+);
 
 const requirements = [
   [
@@ -37,13 +45,13 @@ const requirements = [
   ],
   [
     "top-bar runs execute the current canvas and update node state",
-    /const executeDraftRun = useCallback[\s\S]*runDraftExecution\(id, inputs,[\s\S]*applyNodeRunState\(detail\.runs\)/,
+    /const onTestRun = useCallback[\s\S]*await execution\.run\(\{[\s\S]*runtimeInputs: runtimeInputDescriptors/,
     canvasView,
   ],
   [
     "fast workflows replay node-by-node instead of jumping to the final state",
-    /const playExecutionResult = useCallback[\s\S]*NODE_RUN_STATUS\.RUNNING[\s\S]*window\.setTimeout\(resolve, 420\)[\s\S]*Object\.assign\(visualRun, finalRun\)/,
-    canvasView,
+    /buildCanvasExecutionPlaybackFrames[\s\S]*NODE_RUN_STATUS\.RUNNING[\s\S]*delayAfter:\s*420[\s\S]*Object\.assign\(visualRun, structuredClone\(finalRun\)\)/,
+    executionModel,
   ],
   [
     "execution progress remains visible in the title bar without a side panel",

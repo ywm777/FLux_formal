@@ -474,3 +474,47 @@ Tauri 完整刷新验证：
 6. WebView DevTools 控制台没有红色错误；可见 13 条为既有 ARIA 开发警告，没有本阶段新增异常。
 
 本证据只代表阶段 3。下一阶段将独立提取执行控制器，避免在同一回退边界中混入异步运行生命周期改动。
+
+## 19. 阶段 4 实施证据
+
+完成日期：2026-07-20。
+
+已落地内容：
+
+- 新增纯执行策略与 `CanvasExecutionController`，把运行输入预检、保存后运行、进度投影、快速执行回放、人工确认和陈旧异步响应隔离收敛到一个会话边界。
+- `CanvasView` 只负责构造普通运行时输入描述、注入保存/网关/Store/React Flow 投影端口，并通过 `useSyncExternalStore` 订阅执行快照。
+- 运行时输入草稿保存在执行控制器中，不进入持久化图数据，也不会因为普通 React Flow 节点更新而丢失原生输入框光标和滚动状态。
+- 新建、打开、图编辑和组件卸载都会使旧执行会话失效；旧会话的进度、结果和 `finally` 不会覆盖新会话。
+- 旧的执行源码形状契约已迁移到控制器和组合根边界，避免把已经删除的 `setTestRunDetail`、`runtimeInputDraftsRef` 等实现细节重新固化。
+
+自动验证：
+
+```text
+pnpm --filter @flux/desktop typecheck
+  PASS
+
+pnpm --filter @flux/desktop test:unit
+  42 passed, 0 failed
+
+node test/architecture-boundaries.contract.mjs
+  PASS
+
+apps/desktop/test/*.contract.mjs
+  91 passed, 0 failed
+
+pnpm exec playwright test -c e2e/playwright.config.ts \
+  e2e/canvas-execution.spec.ts --workers=1
+  1 passed, 0 failed
+
+pnpm test:integrity
+  PASS
+```
+
+Tauri 完整刷新验证：
+
+1. 冷启动桌面端后工作台正常渲染；完整刷新后仍可打开本地工作流，没有黑屏或新增 `pageerror`。
+2. 未填写运行输入时，顶部“执行工作流”只触发预检并定位缺失节点；填写后再次执行，节点过程状态和顶部进度均完成。
+3. 连续启动两次运行、编辑画布或关闭画布会话时，旧运行返回会被丢弃，不会残留节点状态或把新的 testing 状态关闭。
+4. 画布框选、连线选择/重连、撤销重做与执行控制器组合后仍保持原有交互；占用输入端口的非法连线会显示不可连接状态并被拒绝。
+
+本证据代表阶段 4。下一阶段按上位架构设计处理 Workspace 端口实例化、API DTO 校验和本地存储原子写入，暂不继续扩大画布组合根的改动范围。

@@ -1,25 +1,20 @@
 import { create } from "zustand";
-import type { ExecutionResponse } from "../lib/api.js";
 
-/** 顶栏模式：画布（创作层）/ 任务（执行层），严格隔离 */
-export type AppMode = "canvas" | "tasks";
+/** 顶栏模式：工作台（流程库）/ 画布（流程创作）/ 节点库（能力创作） */
+export type AppMode = "workbench" | "canvas" | "nodes";
 
 interface AppState {
   mode: AppMode;
+  aiAccessOpen: boolean;
   setMode: (mode: AppMode) => void;
-  /** 最近一次执行结果（用于任务页展示） */
-  lastExecution: ExecutionResponse | null;
-  running: boolean;
-  setRunning: (running: boolean) => void;
-  setLastExecution: (result: ExecutionResponse) => void;
+  openAiAccess: () => void;
+  closeAiAccess: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  mode: "canvas",
+  mode: "workbench",
+  aiAccessOpen: false,
   setMode: (mode) => set({ mode }),
-  lastExecution: null,
-  running: false,
-  setRunning: (running) => set({ running }),
-  setLastExecution: (lastExecution) =>
-    set({ lastExecution, mode: "tasks", running: false }),
+  openAiAccess: () => set({ aiAccessOpen: true }),
+  closeAiAccess: () => set({ aiAccessOpen: false }),
 }));
