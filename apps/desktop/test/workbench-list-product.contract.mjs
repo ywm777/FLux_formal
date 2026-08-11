@@ -9,8 +9,8 @@ const workbenchView = readFileSync(
 
 const requirements = [
   [
-    "workbench list is labeled as workflow inventory instead of publish state",
-    /<h2 style=\{sectionTitle\}>工作流<\/h2>/,
+    "workbench list is labeled as filtered flow inventory instead of publish state",
+    /FLOW_FILTER_LABEL[\s\S]*all:\s*"全部流程"[\s\S]*<h2 style=\{sectionTitle\}>\{FLOW_FILTER_LABEL\[flowFilter\]\}<\/h2>/,
   ],
   [
     "workflow rows describe update time in user-facing copy",

@@ -34,8 +34,9 @@ const requirements = [
     !/runPanelOpen|title="运行结果"|<LogStream|display\.runs\.map/.test(workbenchView),
   ],
   [
-    "default workbench has no permanent execution summary components",
-    !/EmptyExecutionState|EmptyRunSummary|执行详情|最近运行|summaryStats|sidePanel/.test(workbenchView),
+    "workbench adds a global operational projection without embedding raw execution details",
+    /projectWorkbenchFlows[\s\S]*<FlowOverview[\s\S]*<FlowRuntimeStatus/.test(workbenchView) &&
+      !/EmptyExecutionState|EmptyRunSummary|执行详情|<LogStream|display\.runs\.map|sidePanel/.test(workbenchView),
   ],
 ];
 

@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:unit": "node --import ./test/register-ts-source-loader.mjs --test test/workflow-command-coordinator.test.mts test/workflow-session-service.test.mts test/workbench-service.test.mts test/sharing-service.test.mts test/canvas-selection.test.mts test/canvas-history.test.mts test/canvas-execution.test.mts test/canvas-connection-policy.test.mts test/canvas-save-coordinator.test.mts test/canvas-render-index.test.mts test/cron-schedule.test.mts test/cron-expression.test.mts test/local-workflow-scheduler.test.mts test/mcp-capability.test.mts && pnpm test:local-execution",
+    "test:unit": "node --import ./test/register-ts-source-loader.mjs --test test/workflow-command-coordinator.test.mts test/workflow-session-service.test.mts test/workbench-service.test.mts test/workbench-flow-projection.test.mts test/sharing-service.test.mts test/canvas-selection.test.mts test/canvas-history.test.mts test/canvas-execution.test.mts test/canvas-connection-policy.test.mts test/canvas-save-coordinator.test.mts test/canvas-render-index.test.mts test/cron-schedule.test.mts test/cron-expression.test.mts test/local-workflow-scheduler.test.mts test/mcp-capability.test.mts && pnpm test:local-execution",
     "test:local-execution": "node --import ./test/register-ts-source-loader.mjs --test test/local-execution-resume.test.mts",
     "preview": "vite preview",
     "tauri": "tauri",

@@ -16,7 +16,7 @@ const requirements = [
   ],
   [
     "workbench exposes workflow opening without execution",
-    /<h2 style=\{sectionTitle\}>工作流<\/h2>[\s\S]*openWorkflowOnCanvas\(workflow\.id\)/,
+    /FLOW_FILTER_LABEL[\s\S]*全部流程[\s\S]*openWorkflowOnCanvas\(workflow\.id\)/,
     workbenchView,
   ],
   [

@@ -21,6 +21,24 @@ import {
 import { useWorkspaceStore } from "../../store/workspaceStore.js";
 import { useWorkflowCommands } from "../../app/WorkflowCommandProvider.js";
 import { useWorkbenchService } from "../../app/WorkspaceServiceProvider.js";
+import { useLocalSchedulerStore } from "../../store/localSchedulerStore.js";
+import { localWorkflowScheduler } from "../../lib/localWorkflowScheduler.js";
+import { FlowOverview } from "./components/FlowOverview.js";
+import { FlowRuntimeStatus } from "./components/FlowRuntimeStatus.js";
+import {
+  matchesWorkbenchFlowFilter,
+  projectWorkbenchFlows,
+  type WorkbenchFlowFilter,
+} from "./domain/workbenchFlowProjection.js";
+import "./workbench.css";
+
+const FLOW_FILTER_LABEL: Record<WorkbenchFlowFilter, string> = {
+  all: "全部流程",
+  attention: "需要关注",
+  running: "运行中",
+  scheduled: "等待触发",
+  completed: "最近完成",
+};
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -56,6 +74,8 @@ export function WorkbenchView({ active = true }: { active?: boolean }) {
   const workspaceKind = useWorkspaceStore((s) => s.kind);
   const setWorkspaceKind = useWorkspaceStore((s) => s.setKind);
   const canvasLastSavedAt = useCanvasStore((s) => s.lastSavedAt);
+  const localRuntimeSnapshots = useLocalSchedulerStore((s) => s.workflows);
+  const schedulerError = useLocalSchedulerStore((s) => s.serviceError);
 
   useEffect(() => {
     if (active) void load(workspaceKind);
@@ -63,6 +83,7 @@ export function WorkbenchView({ active = true }: { active?: boolean }) {
 
   const [query, setQuery] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [flowFilter, setFlowFilter] = useState<WorkbenchFlowFilter>("all");
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -171,16 +192,25 @@ export function WorkbenchView({ active = true }: { active?: boolean }) {
 
   const initialLoading = loading && workflows.length === 0;
   const workflowListEmpty = !loading && workflows.length === 0;
-  const visibleWorkflows = useMemo(() => {
+  const flowProjection = useMemo(
+    () => projectWorkbenchFlows(
+      workflows,
+      workspaceKind === "local" ? localRuntimeSnapshots : {},
+    ),
+    [localRuntimeSnapshots, workflows, workspaceKind],
+  );
+  const visibleFlows = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    return workflows.filter((workflow) => {
+    return flowProjection.items.filter((flow) => {
+      const workflow = flow.workflow;
       if (favoritesOnly && !workflow.isFavorite) return false;
+      if (!matchesWorkbenchFlowFilter(flow, flowFilter)) return false;
       if (!normalizedQuery) return true;
       return workflow.title.toLocaleLowerCase().includes(normalizedQuery);
     });
-  }, [favoritesOnly, query, workflows]);
+  }, [favoritesOnly, flowFilter, flowProjection.items, query]);
   const filteredListEmpty =
-    !loading && workflows.length > 0 && visibleWorkflows.length === 0;
+    !loading && workflows.length > 0 && visibleFlows.length === 0;
   const contextWorkflow = contextMenu
     ? workflows.find((workflow) => workflow.id === contextMenu.workflowId) ?? null
     : null;
@@ -235,7 +265,7 @@ export function WorkbenchView({ active = true }: { active?: boolean }) {
             <p style={pageSubtitle}>
               {initialLoading
                 ? workspaceKind === "local" ? "正在读取工作流" : "正在同步工作流"
-                : `${workflows.length} 个工作流`}
+                : `${workflows.length} 个流对象`}
               {!initialLoading && (
                 <span> · {workspaceKind === "local" ? "本地空间" : "云端空间"}</span>
               )}
@@ -320,9 +350,35 @@ export function WorkbenchView({ active = true }: { active?: boolean }) {
           </div>
         )}
 
+        {workspaceKind === "local" && schedulerError ? (
+          <div role="alert" style={errorBox}>
+            <span>运行状态暂时不可用：{schedulerError}</span>
+            <button
+              type="button"
+              onClick={() => void localWorkflowScheduler.refresh()}
+              style={retryButton}
+            >
+              重新连接
+            </button>
+          </div>
+        ) : null}
+
+        {!initialLoading && workflows.length > 0 ? (
+          <FlowOverview
+            overview={flowProjection.overview}
+            activeFilter={flowFilter}
+            onFilterChange={setFlowFilter}
+          />
+        ) : null}
+
         <section style={publishedSection}>
           <div style={publishedHeader}>
-            <h2 style={sectionTitle}>工作流</h2>
+            <div style={sectionHeadingGroup}>
+              <h2 style={sectionTitle}>{FLOW_FILTER_LABEL[flowFilter]}</h2>
+              <span style={sectionDescription}>
+                {flowFilter === "all" ? "按运行优先级排列" : "点击“全部流程”返回全局视图"}
+              </span>
+            </div>
             {workflows.length > 0 && (
               <div style={listTools}>
                 <label style={searchWrap}>
@@ -391,6 +447,7 @@ export function WorkbenchView({ active = true }: { active?: boolean }) {
             <div style={workflowListHeader} aria-hidden="true">
               <span />
               <span>名称</span>
+              <span>运行状态</span>
               <span>更新</span>
               <span>操作</span>
             </div>
@@ -491,12 +548,13 @@ export function WorkbenchView({ active = true }: { active?: boolean }) {
             {filteredListEmpty && (
               <div style={emptyList}>
                 <strong style={emptyTitle}>没有匹配的工作流</strong>
-                <span>换一个关键词，或关闭收藏筛选。</span>
+                <span>当前筛选下没有流程。调整状态、关键词或收藏条件。</span>
                 <button
                   type="button"
                   onClick={() => {
                     setQuery("");
                     setFavoritesOnly(false);
+                    setFlowFilter("all");
                   }}
                   style={clearFilterButton}
                 >
@@ -505,7 +563,8 @@ export function WorkbenchView({ active = true }: { active?: boolean }) {
               </div>
             )}
 
-            {visibleWorkflows.map((workflow) => {
+            {visibleFlows.map((flow) => {
+              const workflow = flow.workflow;
               const favoriteLabel = workflow.isFavorite
                 ? `取消收藏 ${workflow.title}`
                 : `收藏 ${workflow.title}`;
@@ -555,14 +614,15 @@ export function WorkbenchView({ active = true }: { active?: boolean }) {
                   onClick={() => openWorkflowOnCanvas(workflow.id)}
                   style={workflowInfoButton}
                 >
-                  <span style={rowTitleGroup}>
+                   <span style={rowTitleGroup}>
                     <strong style={rowTitle}>{workflow.title}</strong>
                     <span style={workflowState(workflow.status)}>
                       <span style={workflowStateDot(workflow.status)} />
                       {workflow.status === "published" ? "已发布" : "编辑中"}
                     </span>
-                  </span>
-                  <span style={rowMeta}>
+                    </span>
+                    <FlowRuntimeStatus flow={flow} />
+                   <span style={rowMeta}>
                     更新于 {formatDate(workflow.updatedAt)}
                   </span>
                 </button>
@@ -847,6 +907,17 @@ const publishedHeader: React.CSSProperties = {
   gap: "var(--space-4)",
 };
 
+const sectionHeadingGroup: React.CSSProperties = {
+  minWidth: 0,
+  display: "grid",
+  gap: 2,
+};
+
+const sectionDescription: React.CSSProperties = {
+  color: "var(--text-muted)",
+  fontSize: "var(--text-xs)",
+};
+
 const listTools: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -940,7 +1011,7 @@ const workflowList: React.CSSProperties = {
 
 const workflowListHeader: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "28px minmax(0, 1fr) 180px 112px",
+  gridTemplateColumns: "28px minmax(0, 1fr) 210px 140px 112px",
   alignItems: "center",
   gap: "var(--space-3)",
   padding: "0 var(--space-3)",
@@ -951,7 +1022,7 @@ const workflowListHeader: React.CSSProperties = {
 const workflowRow: React.CSSProperties = {
   minHeight: 76,
   display: "grid",
-  gridTemplateColumns: "28px minmax(0, 1fr) 180px 112px",
+  gridTemplateColumns: "28px minmax(0, 1fr) 210px 140px 112px",
   alignItems: "center",
   gap: "var(--space-3)",
   padding: "var(--space-3)",
@@ -961,10 +1032,10 @@ const workflowRow: React.CSSProperties = {
 };
 
 const workflowInfoButton: React.CSSProperties = {
-  gridColumn: "2 / span 2",
+  gridColumn: "2 / span 3",
   minWidth: 0,
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) 180px",
+  gridTemplateColumns: "minmax(0, 1fr) 210px 140px",
   alignItems: "center",
   gap: 3,
   padding: 0,

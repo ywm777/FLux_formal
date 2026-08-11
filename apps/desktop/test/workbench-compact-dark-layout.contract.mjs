@@ -20,12 +20,12 @@ const requirements = [
     /<h1 style=\{pageTitle\}>工作台<\/h1>/,
   ],
   [
-    "workbench count copy names workflows directly",
-    /`\$\{workflows\.length\} 个工作流`/,
+    "workbench count copy names flow objects directly",
+    /`\$\{workflows\.length\} 个流对象`/,
   ],
   [
-    "workflow list is a section heading below the page title",
-    /<h2 style=\{sectionTitle\}>工作流<\/h2>/,
+    "flow inventory keeps a filtered section heading below the page title",
+    /<h2 style=\{sectionTitle\}>\{FLOW_FILTER_LABEL\[flowFilter\]\}<\/h2>/,
   ],
   [
     "workbench header keeps responsive wrapping without becoming a card",

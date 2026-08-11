@@ -25,7 +25,7 @@ const requirements = [
   ],
   [
     "workflow inventory renders a compact desktop list header",
-    /<div style=\{workflowListHeader\} aria-hidden="true">[\s\S]*<span>名称<\/span>[\s\S]*<span>更新<\/span>[\s\S]*<span>操作<\/span>/,
+    /<div style=\{workflowListHeader\} aria-hidden="true">[\s\S]*<span>名称<\/span>[\s\S]*<span>运行状态<\/span>[\s\S]*<span>更新<\/span>[\s\S]*<span>操作<\/span>/,
     workbenchView,
   ],
   [
@@ -45,7 +45,7 @@ const requirements = [
   ],
   [
     "desktop list header aligns with row columns",
-    /gridTemplateColumns:\s*"28px minmax\(0, 1fr\) 180px 112px"/,
+    /gridTemplateColumns:\s*"28px minmax\(0, 1fr\) 210px 140px 112px"/,
     listHeaderBlock,
   ],
 ];

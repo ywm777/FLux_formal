@@ -85,8 +85,8 @@ const requirements = [
     !existsSync(legacyTasksViewPath),
   ],
   [
-    "workbench default surface is a launchpad, not a permanent execution dashboard",
-    !/执行详情|最近运行|summaryBand|contentGrid|sidePanel/.test(workbenchView),
+    "workbench is the global flow operations surface",
+    /<FlowOverview[\s\S]*overview=\{flowProjection\.overview\}[\s\S]*<FlowRuntimeStatus flow=\{flow\}/.test(workbenchView),
   ],
 ];
 
