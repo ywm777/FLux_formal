@@ -842,10 +842,12 @@ const shell: React.CSSProperties = {
 };
 
 const frame: React.CSSProperties = {
+  width: "100%",
   height: "100%",
-  maxWidth: 1180,
+  maxWidth: 1920,
+  boxSizing: "border-box",
   margin: "0 auto",
-  padding: "var(--space-5) clamp(var(--space-5), 4vw, var(--space-8))",
+  padding: "var(--space-5) clamp(var(--space-4), 2.5vw, var(--space-8))",
   display: "flex",
   flexDirection: "column",
   gap: "var(--space-4)",
@@ -1011,7 +1013,8 @@ const workflowList: React.CSSProperties = {
 
 const workflowListHeader: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "28px minmax(0, 1fr) 210px 140px 112px",
+  gridTemplateColumns:
+    "28px minmax(280px, 1.5fr) minmax(210px, 0.75fr) minmax(140px, 0.45fr) 112px",
   alignItems: "center",
   gap: "var(--space-3)",
   padding: "0 var(--space-3)",
@@ -1022,7 +1025,8 @@ const workflowListHeader: React.CSSProperties = {
 const workflowRow: React.CSSProperties = {
   minHeight: 76,
   display: "grid",
-  gridTemplateColumns: "28px minmax(0, 1fr) 210px 140px 112px",
+  gridTemplateColumns:
+    "28px minmax(280px, 1.5fr) minmax(210px, 0.75fr) minmax(140px, 0.45fr) 112px",
   alignItems: "center",
   gap: "var(--space-3)",
   padding: "var(--space-3)",
@@ -1035,9 +1039,10 @@ const workflowInfoButton: React.CSSProperties = {
   gridColumn: "2 / span 3",
   minWidth: 0,
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) 210px 140px",
+  gridTemplateColumns:
+    "minmax(280px, 1.5fr) minmax(210px, 0.75fr) minmax(140px, 0.45fr)",
   alignItems: "center",
-  gap: 3,
+  gap: "var(--space-3)",
   padding: 0,
   border: "none",
   textAlign: "left",

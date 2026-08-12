@@ -19,8 +19,8 @@ const listHeaderBlock = constBlock(workbenchView, "workflowListHeader");
 
 const requirements = [
   [
-    "desktop workbench uses a wider app-like content frame",
-    /maxWidth:\s*1180[\s\S]*padding:\s*"var\(--space-5\) clamp\(var\(--space-5\), 4vw, var\(--space-8\)\)"/,
+    "desktop workbench uses the available window width with an ultrawide readability guard",
+    /width:\s*"100%"[\s\S]*maxWidth:\s*1920[\s\S]*boxSizing:\s*"border-box"[\s\S]*padding:\s*"var\(--space-5\) clamp\(var\(--space-4\), 2\.5vw, var\(--space-8\)\)"/,
     frameBlock,
   ],
   [
@@ -44,8 +44,8 @@ const requirements = [
     workflowInfoButtonBlock,
   ],
   [
-    "desktop list header aligns with row columns",
-    /gridTemplateColumns:\s*"28px minmax\(0, 1fr\) 210px 140px 112px"/,
+    "desktop list header distributes wide space across its information columns",
+    /gridTemplateColumns:[\s\S]*"28px minmax\(280px, 1\.5fr\) minmax\(210px, 0\.75fr\) minmax\(140px, 0\.45fr\) 112px"/,
     listHeaderBlock,
   ],
 ];
